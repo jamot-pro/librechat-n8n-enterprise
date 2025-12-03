@@ -78,5 +78,8 @@
     "schema",
     "typescript",
     "librechat"
-  ]
+  ],
+  "dependencies": {
+    "file-stream-rotator": "^0.6.1"
+  }
 }
