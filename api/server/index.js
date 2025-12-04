@@ -61,8 +61,14 @@ const startServer = async () => {
   await performStartupChecks(appConfig);
   await updateInterfacePermissions(appConfig);
 
-  const indexPath = path.join(appConfig.paths.dist, 'index.html');
-  let indexHTML = fs.readFileSync(indexPath, 'utf8');
+  let indexHTML = '';
+  try {
+    const indexPath = path.join(appConfig.paths.dist, 'index.html');
+    indexHTML = fs.readFileSync(indexPath, 'utf8');
+    console.log('[server] Frontend assets loaded');
+  } catch (error) {
+    console.log('[server] Frontend not built, running backend-only mode');
+  }
 
   // In order to provide support to serving the application in a sub-directory
   // We need to update the base href if the DOMAIN_CLIENT is specified and not the root path
@@ -154,6 +160,22 @@ const startServer = async () => {
   app.use(ErrorController);
 
   app.use((req, res) => {
+    // Backend-only mode - return JSON info instead of HTML
+    if (!indexHTML) {
+      return res.json({
+        message: 'LibreChat Backend API',
+        status: 'running',
+        mode: 'backend-only',
+        endpoints: {
+          health: '/health',
+          auth: '/api/auth',
+          n8n: '/api/n8n',
+        },
+        note: 'Frontend not built. Use API endpoints directly or build frontend with: npm run frontend',
+      });
+    }
+
+    // Serve frontend if built
     res.set({
       'Cache-Control': process.env.INDEX_CACHE_CONTROL || 'no-cache, no-store, must-revalidate',
       Pragma: process.env.INDEX_PRAGMA || 'no-cache',
