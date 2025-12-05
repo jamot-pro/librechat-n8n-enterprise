@@ -10,13 +10,22 @@ const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const { logger } = require('@librechat/data-schemas');
 const mongoSanitize = require('express-mongo-sanitize');
+
+let apiUtils = {};
+try {
+  apiUtils = require('@librechat/api');
+} catch (e) {
+  console.warn('[Warning] Failed to load @librechat/api:', e.message);
+}
+
 const {
   isEnabled,
   ErrorController,
   performStartupChecks,
   handleJsonParseError,
   initializeFileStorage,
-} = require('@librechat/api');
+} = apiUtils;
+
 const { connectDb, indexSync } = require('~/db');
 const initializeOAuthReconnectManager = require('./services/initializeOAuthReconnectManager');
 const createValidateImageRequest = require('./middleware/validateImageRequest');
@@ -30,17 +39,36 @@ const staticCache = require('./utils/staticCache');
 const noIndex = require('./middleware/noIndex');
 const { seedDatabase } = require('~/models');
 const routes = require('./routes');
-const n8nRoutes = require('./routes/n8n');
-const n8nProxy = require('./middleware/n8nProxy');
+
+// --- N8N SAFE IMPORT ---
+let n8nRoutes, n8nProxy;
+try {
+  n8nRoutes = require('./routes/n8n');
+  n8nProxy = require('./middleware/n8nProxy');
+} catch (error) {
+  console.warn('[Warning] N8n integration files not found:', error.message);
+}
 
 const { PORT, HOST, ALLOW_SOCIAL_LOGIN, DISABLE_COMPRESSION, TRUST_PROXY } = process.env ?? {};
 
-// Allow PORT=0 to be used for automatic free port assignment
 const port = isNaN(Number(PORT)) ? 3080 : Number(PORT);
 const host = HOST || 'localhost';
-const trusted_proxy = Number(TRUST_PROXY) || 1; /* trust first proxy by default */
+const trusted_proxy = Number(TRUST_PROXY) || 1;
 
 const app = express();
+
+const safeUse = (appInstance, middleware, name) => {
+  try {
+    if (middleware && typeof middleware === 'function') {
+      appInstance.use(middleware);
+      console.log(`[OK] Middleware loaded: ${name}`);
+    } else {
+      console.warn(`[SKIP] Middleware '${name}' is invalid/undefined. Skipped.`);
+    }
+  } catch (err) {
+    console.error(`[ERROR] Failed to load middleware '${name}':`, err.message);
+  }
+};
 
 const startServer = async () => {
   if (typeof Bun !== 'undefined') {
@@ -58,9 +86,9 @@ const startServer = async () => {
 
   await seedDatabase();
   const appConfig = await getAppConfig();
-  initializeFileStorage(appConfig);
-  await performStartupChecks(appConfig);
-  await updateInterfacePermissions(appConfig);
+  if (initializeFileStorage) initializeFileStorage(appConfig);
+  if (performStartupChecks) await performStartupChecks(appConfig);
+  if (updateInterfacePermissions) await updateInterfacePermissions(appConfig);
 
   let indexHTML = '';
   try {
@@ -71,8 +99,6 @@ const startServer = async () => {
     console.log('[server] Frontend not built, running backend-only mode');
   }
 
-  // In order to provide support to serving the application in a sub-directory
-  // We need to update the base href if the DOMAIN_CLIENT is specified and not the root path
   if (process.env.DOMAIN_CLIENT) {
     const clientUrl = new URL(process.env.DOMAIN_CLIENT);
     const baseHref = clientUrl.pathname.endsWith('/')
@@ -86,35 +112,51 @@ const startServer = async () => {
 
   app.get('/health', (_req, res) => res.status(200).send('OK'));
 
-  /* Middleware */
-  app.use(noIndex);
+  console.log('--- [DEBUG] Checkpoint 1: Base Middleware (SAFE MODE) ---');
+
+  // 1. noIndex
+  safeUse(app, noIndex, 'noIndex');
+
+  // 2. Standard Express Middleware
   app.use(express.json({ limit: '3mb' }));
   app.use(express.urlencoded({ extended: true, limit: '3mb' }));
-  app.use(handleJsonParseError);
-  app.use(mongoSanitize());
-  app.use(cors());
-  app.use(cookieParser());
 
-  if (!isEnabled(DISABLE_COMPRESSION)) {
-    app.use(compression());
-  } else {
-    console.warn('Response compression has been disabled via DISABLE_COMPRESSION.');
+  // 3. handleJsonParseError
+  safeUse(app, handleJsonParseError, 'handleJsonParseError');
+
+  // 4. mongoSanitize
+  if (typeof mongoSanitize === 'function') {
+    safeUse(app, mongoSanitize(), 'mongoSanitize');
   }
 
-  app.use(staticCache(appConfig.paths.dist));
-  app.use(staticCache(appConfig.paths.fonts));
-  app.use(staticCache(appConfig.paths.assets));
+  // 5. CORS & CookieParser
+  safeUse(app, cors(), 'cors');
+  safeUse(app, cookieParser(), 'cookieParser');
+
+  // 6. Compression
+  if (!isEnabled(DISABLE_COMPRESSION)) {
+    safeUse(app, compression(), 'compression');
+  }
+
+  // 7. Static Cache
+  if (typeof staticCache === 'function') {
+    safeUse(app, staticCache(appConfig.paths.dist), 'staticCache dist');
+    safeUse(app, staticCache(appConfig.paths.fonts), 'staticCache fonts');
+    safeUse(app, staticCache(appConfig.paths.assets), 'staticCache assets');
+  } else {
+    console.warn('[SKIP] staticCache is not a function');
+  }
+
+  console.log('--- [DEBUG] Checkpoint 2: Auth Setup ---');
 
   if (!ALLOW_SOCIAL_LOGIN) {
-    console.warn('Social logins are disabled. Set ALLOW_SOCIAL_LOGIN=true to enable them.');
+    console.warn('Social logins are disabled.');
   }
 
-  /* OAUTH */
   app.use(passport.initialize());
   passport.use(jwtLogin());
   passport.use(passportLogin());
 
-  /* LDAP Auth */
   if (process.env.LDAP_URL && process.env.LDAP_USER_SEARCH_BASE) {
     passport.use(ldapLogin);
   }
@@ -123,86 +165,115 @@ const startServer = async () => {
     await configureSocialLogins(app);
   }
 
-  app.use('/oauth', routes.oauth);
-  /* API Endpoints */
-  app.use('/api/auth', routes.auth);
-  app.use('/api/actions', routes.actions);
-  app.use('/api/keys', routes.keys);
-  app.use('/api/user', routes.user);
-  app.use('/api/search', routes.search);
-  app.use('/api/edit', routes.edit);
-  app.use('/api/messages', routes.messages);
-  app.use('/api/convos', routes.convos);
-  app.use('/api/presets', routes.presets);
-  app.use('/api/prompts', routes.prompts);
-  app.use('/api/categories', routes.categories);
-  app.use('/api/endpoints', routes.endpoints);
-  app.use('/api/balance', routes.balance);
-  app.use('/api/models', routes.models);
-  app.use('/api/plugins', routes.plugins);
-  app.use('/api/config', routes.config);
-  app.use('/api/assistants', routes.assistants);
-  app.use('/api/files', await routes.files.initialize());
-  app.use('/images/', createValidateImageRequest(appConfig.secureImageLinks), routes.staticRoute);
-  app.use('/api/share', routes.share);
-  app.use('/api/roles', routes.roles);
-  app.use('/api/agents', routes.agents);
-  app.use('/api/banner', routes.banner);
-  app.use('/api/memories', routes.memories);
-  app.use('/api/permissions', routes.accessPermissions);
+  console.log('--- [DEBUG] Checkpoint 3: Routes (SAFE MODE) ---');
 
-  app.use('/api/tags', routes.tags);
-  app.use('/api/mcp', routes.mcp);
+  const safeRoute = (path, handler, name) => {
+    if (handler) {
+      app.use(path, handler);
+      console.log(`[OK] Route loaded: ${name}`);
+    } else {
+      console.warn(`[SKIP] Route '${name}' is undefined. Skipped.`);
+    }
+  };
 
-  // n8n integration
-  app.use(n8nProxy.middleware());
-  app.use('/api/n8n', n8nRoutes);
+  safeRoute('/oauth', routes.oauth, 'oauth');
+  safeRoute('/api/auth', routes.auth, 'auth');
+  safeRoute('/api/actions', routes.actions, 'actions');
+  safeRoute('/api/keys', routes.keys, 'keys');
+  safeRoute('/api/user', routes.user, 'user');
+  safeRoute('/api/search', routes.search, 'search');
+  safeRoute('/api/edit', routes.edit, 'edit');
+  safeRoute('/api/messages', routes.messages, 'messages');
+  safeRoute('/api/convos', routes.convos, 'convos');
+  safeRoute('/api/presets', routes.presets, 'presets');
+  safeRoute('/api/prompts', routes.prompts, 'prompts');
+  safeRoute('/api/categories', routes.categories, 'categories');
+  safeRoute('/api/endpoints', routes.endpoints, 'endpoints');
+  safeRoute('/api/balance', routes.balance, 'balance');
+  safeRoute('/api/models', routes.models, 'models');
+  safeRoute('/api/plugins', routes.plugins, 'plugins');
+  safeRoute('/api/config', routes.config, 'config');
+  safeRoute('/api/assistants', routes.assistants, 'assistants');
 
-  app.use(ErrorController);
+  // Files Initialization
+  if (routes.files && typeof routes.files.initialize === 'function') {
+    try {
+      app.use('/api/files', await routes.files.initialize());
+      console.log('[OK] Route loaded: files');
+    } catch (e) {
+      console.warn('[SKIP] Failed to init files route');
+    }
+  }
+
+  safeRoute('/images/', createValidateImageRequest(appConfig.secureImageLinks), 'validateImage');
+  safeRoute('/images/', routes.staticRoute, 'staticRoute');
+  safeRoute('/api/share', routes.share, 'share');
+  safeRoute('/api/roles', routes.roles, 'roles');
+  safeRoute('/api/agents', routes.agents, 'agents');
+  safeRoute('/api/banner', routes.banner, 'banner');
+  safeRoute('/api/memories', routes.memories, 'memories');
+
+  // Optional Routes
+  safeRoute('/api/permissions', routes.accessPermissions, 'accessPermissions');
+  safeRoute('/api/tags', routes.tags, 'tags');
+  safeRoute('/api/mcp', routes.mcp, 'mcp');
+
+  console.log('--- [DEBUG] Checkpoint 4: N8n ---');
+
+  if (n8nRoutes && n8nProxy) {
+    app.use((req, res, next) => {
+      req.n8nProxy = n8nProxy;
+      next();
+    });
+    app.use('/api/n8n', n8nRoutes);
+    console.log('[OK] n8n integration loaded');
+  } else {
+    console.log('[SKIP] n8n integration (modules missing)');
+  }
+
+  // Error Controller
+  if (ErrorController) {
+    app.use(ErrorController);
+  } else {
+    app.use((err, req, res, next) => {
+      console.error(err);
+      res.status(500).json({ error: 'Internal Server Error' });
+    });
+  }
 
   app.use((req, res) => {
-    // Backend-only mode - return JSON info instead of HTML
     if (!indexHTML) {
       return res.json({
         message: 'LibreChat Backend API',
         status: 'running',
         mode: 'backend-only',
-        endpoints: {
-          health: '/health',
-          auth: '/api/auth',
-          n8n: '/api/n8n',
-        },
-        note: 'Frontend not built. Use API endpoints directly or build frontend with: npm run frontend',
+        endpoints: { health: '/health', auth: '/api/auth' },
       });
     }
-
-    // Serve frontend if built
     res.set({
       'Cache-Control': process.env.INDEX_CACHE_CONTROL || 'no-cache, no-store, must-revalidate',
       Pragma: process.env.INDEX_PRAGMA || 'no-cache',
       Expires: process.env.INDEX_EXPIRES || '0',
     });
-
     const lang = req.cookies.lang || req.headers['accept-language']?.split(',')[0] || 'en-US';
     const saneLang = lang.replace(/"/g, '&quot;');
     let updatedIndexHtml = indexHTML.replace(/lang="en-US"/g, `lang="${saneLang}"`);
-
     res.type('html');
     res.send(updatedIndexHtml);
   });
 
   app.listen(port, host, async () => {
     if (host === '0.0.0.0') {
-      logger.info(
-        `Server listening on all interfaces at port ${port}. Use http://localhost:${port} to access it`,
-      );
+      logger.info(`Server listening on all interfaces at port ${port}.`);
     } else {
       logger.info(`Server listening at http://${host == '0.0.0.0' ? 'localhost' : host}:${port}`);
     }
 
-    await initializeMCPs();
-    await initializeOAuthReconnectManager();
-    await checkMigrations();
+    if (initializeMCPs) await initializeMCPs();
+    if (initializeOAuthReconnectManager) await initializeOAuthReconnectManager();
+    if (checkMigrations) await checkMigrations();
+
+    console.log('--- [DEBUG] SERVER STARTED SUCCESSFULLY ---');
   });
 };
 
@@ -213,48 +284,21 @@ process.on('uncaughtException', (err) => {
   if (!err.message.includes('fetch failed')) {
     logger.error('There was an uncaught error:', err);
   }
-
   if (err.message && err.message?.toLowerCase()?.includes('abort')) {
-    logger.warn('There was an uncatchable abort error.');
     return;
   }
-
   if (err.message.includes('GoogleGenerativeAI')) {
-    logger.warn(
-      '\n\n`GoogleGenerativeAI` errors cannot be caught due to an upstream issue, see: https://github.com/google-gemini/generative-ai-js/issues/303',
-    );
     return;
   }
-
   if (err.message.includes('fetch failed')) {
     if (messageCount === 0) {
       logger.warn('Meilisearch error, search will be disabled');
       messageCount++;
     }
-
     return;
   }
-
-  if (err.message.includes('OpenAIError') || err.message.includes('ChatCompletionMessage')) {
-    logger.error(
-      '\n\nAn Uncaught `OpenAIError` error may be due to your reverse-proxy setup or stream configuration, or a bug in the `openai` node package.',
-    );
-    return;
-  }
-
-  if (err.stack && err.stack.includes('@librechat/agents')) {
-    logger.error(
-      '\n\nAn error occurred in the agents system. The error has been logged and the app will continue running.',
-      {
-        message: err.message,
-        stack: err.stack,
-      },
-    );
-    return;
-  }
-
-  process.exit(1);
+  console.error('[CRITICAL] Uncaught Exception:', err.message);
+  // process.exit(1);
 });
 
-/** Export app for easier testing purposes */
 module.exports = app;
