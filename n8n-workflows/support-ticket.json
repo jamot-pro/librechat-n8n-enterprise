@@ -1,0 +1,77 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "librechat/support-ticket",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "abf2ba49-8de7-4627-8011-daa053def084",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "support-ticket"
+    },
+    {
+      "parameters": {
+        "jsCode": "const USE_MOCK_DATA = true;\n\nconst requestData = $json.body || $json;\nconst subject = requestData.subject;\nconst description = requestData.description;\nconst priority = requestData.priority;\nconst context = requestData._context;\n\nif (!subject || subject.length < 5) {\n  return [{\n    json: {\n      success: false,\n      error: 'Subject must be at least 5 characters'\n    }\n  }];\n}\n\nif (!description || description.length < 10) {\n  return [{\n    json: {\n      success: false,\n      error: 'Description must be at least 10 characters'\n    }\n  }];\n}\n\nconst ticketId = `TKT-${Date.now()}`;\nconst responseTime = {\n  'low': '48 hours',\n  'medium': '24 hours',\n  'high': '4 hours',\n  'urgent': '1 hour'\n}[priority] || '24 hours';\n\nconst ticket = {\n  id: ticketId,\n  subject: subject,\n  description: description,\n  priority: priority,\n  status: 'open',\n  customerId: context.userId || 'unknown',\n  assignedTo: 'Support Team',\n  createdAt: new Date().toISOString(),\n  estimatedResponseTime: responseTime\n};\n\nreturn [{\n  json: {\n    success: true,\n    message: `Support ticket created successfully. Our team will respond within ${responseTime}.`,\n    ticket: ticket,\n    nextSteps: [\n      'You will receive an email confirmation shortly',\n      `A support agent will respond within ${responseTime}`,\n      'You can track your ticket status in the customer portal'\n    ],\n    contactInfo: {\n      email: 'support@company.com',\n      phone: '+1-555-SUPPORT',\n      hours: 'Mon-Fri 9AM-6PM EST'\n    },\n    dataSource: 'mock',\n    generatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "686c0427-26f5-4495-b649-21c46a5e00c2",
+      "name": "Create Ticket",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "8ca288a1-544e-494b-af30-4c190dd0e2df",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Create Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Ticket": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "d1b0677434545dc7167f4d21eff9392d609e94e2ea7906e38242045c57c64797"
+  }
+}

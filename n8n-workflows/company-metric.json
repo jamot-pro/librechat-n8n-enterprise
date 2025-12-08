@@ -1,0 +1,77 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "librechat/company-metrics",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "2137d10d-b85e-41de-901b-2a8dd8727063",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "company-metrics"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// SMART MOCK DATA PATTERN\n// ============================================\nconst USE_MOCK_DATA = true; // ← Change to false when MongoDB ready\n\n// ============================================\n// VALIDATION\n// ============================================\nconst requestData = $json.body || $json;\nconst context = requestData._context;\n\nif (!context || context.profileType !== 'ceo') {\n  return [{\n    json: {\n      success: false,\n      error: 'Access denied: CEO profile required'\n    }\n  }];\n}\n\n// ============================================\n// MOCK DATA SOURCE\n// ============================================\nfunction getMockCompanyMetrics() {\n  return {\n    overall: {\n      employeeCount: 150,\n      customerCount: 2500,\n      activeProjects: 45,\n      completionRate: 92,\n      customerSatisfaction: 4.6\n    },\n    departments: [\n      {\n        name: 'Engineering',\n        employees: 45,\n        productivity: 87,\n        projectsCompleted: 12,\n        budget: 850000,\n        spent: 780000\n      },\n      {\n        name: 'Sales',\n        employees: 30,\n        productivity: 92,\n        dealsWon: 156,\n        revenue: 2100000,\n        target: 2000000\n      },\n      {\n        name: 'Marketing',\n        employees: 25,\n        productivity: 85,\n        campaigns: 8,\n        leads: 1200,\n        conversions: 240\n      },\n      {\n        name: 'Customer Support',\n        employees: 20,\n        productivity: 94,\n        ticketsResolved: 3500,\n        avgResponseTime: '2.3 hours',\n        satisfaction: 4.7\n      }\n    ],\n    quarterlyGoals: [\n      { goal: 'Increase revenue by 20%', progress: 78, status: 'on-track' },\n      { goal: 'Launch 3 new products', progress: 66, status: 'on-track' },\n      { goal: 'Reduce costs by 10%', progress: 45, status: 'at-risk' },\n      { goal: 'Improve NPS to 50+', progress: 92, status: 'achieved' }\n    ]\n  };\n}\n\n// ============================================\n// REAL DATA SOURCE (MongoDB)\n// ============================================\nfunction getRealCompanyMetrics() {\n  // TODO: Connect to MongoDB\n  return getMockCompanyMetrics();\n}\n\n// ============================================\n// MAIN LOGIC\n// ============================================\nconst metricsData = USE_MOCK_DATA \n  ? getMockCompanyMetrics() \n  : getRealCompanyMetrics();\n\n// ============================================\n// RESPONSE\n// ============================================\nreturn [{\n  json: {\n    success: true,\n    data: metricsData,\n    summary: `${metricsData.overall.employeeCount} employees | ${metricsData.overall.activeProjects} active projects | ${metricsData.overall.customerSatisfaction}/5.0 satisfaction`,\n    highlights: [\n      `Sales exceeded target by ${((metricsData.departments[1].revenue / metricsData.departments[1].target - 1) * 100).toFixed(1)}%`,\n      `${metricsData.quarterlyGoals.filter(g => g.status === 'achieved').length} quarterly goals achieved`,\n      `Customer Support maintains ${metricsData.departments[3].satisfaction}/5.0 rating`\n    ],\n    dataSource: USE_MOCK_DATA ? 'mock' : 'mongodb',\n    generatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "84096eb3-5ab3-4091-aa79-abc51a4119c0",
+      "name": "Process Company Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "4b14c94f-8205-433f-b264-12e54b3e8b1f",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Company Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Company Metrics": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "d1b0677434545dc7167f4d21eff9392d609e94e2ea7906e38242045c57c64797"
+  }
+}

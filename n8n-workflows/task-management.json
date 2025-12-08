@@ -1,0 +1,77 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "librechat/task-management",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "84f2f8d1-d1e0-407d-86da-060520b22db3",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "task-management"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// SMART MOCK DATA PATTERN\n// ============================================\nconst USE_MOCK_DATA = true; // ← Change to false when MongoDB ready\n\nconst requestData = $json.body || $json;\nconst action = requestData.action;\nconst taskData = requestData.taskData;\nconst context = requestData._context;\n\n// ============================================\n// MOCK DATA SOURCE\n// ============================================\nfunction getMockTasks() {\n  return [\n    {\n      id: 'task1',\n      title: 'Complete Q4 report',\n      description: 'Prepare quarterly performance report',\n      status: 'in-progress',\n      priority: 'high',\n      dueDate: '2024-12-15',\n      createdAt: '2024-12-01'\n    },\n    {\n      id: 'task2',\n      title: 'Review pull request #234',\n      description: 'Code review for new feature',\n      status: 'pending',\n      priority: 'medium',\n      dueDate: '2024-12-08',\n      createdAt: '2024-12-05'\n    },\n    {\n      id: 'task3',\n      title: 'Update documentation',\n      description: 'Update API docs for v2.0',\n      status: 'completed',\n      priority: 'low',\n      dueDate: '2024-12-05',\n      createdAt: '2024-11-28'\n    }\n  ];\n}\n\n// ============================================\n// REAL DATA SOURCE (MongoDB)\n// ============================================\nfunction getRealTasks() {\n  // TODO: Query MongoDB tasks collection\n  return getMockTasks();\n}\n\n// ============================================\n// MAIN LOGIC\n// ============================================\nconst tasks = USE_MOCK_DATA ? getMockTasks() : getRealTasks();\nlet response = {};\n\nswitch(action) {\n  case 'list':\n    response = {\n      success: true,\n      tasks: tasks,\n      summary: {\n        total: tasks.length,\n        pending: tasks.filter(t => t.status === 'pending').length,\n        inProgress: tasks.filter(t => t.status === 'in-progress').length,\n        completed: tasks.filter(t => t.status === 'completed').length\n      }\n    };\n    break;\n    \n  case 'create':\n    const newTask = {\n      id: `task${Date.now()}`,\n      title: taskData.title || 'New Task',\n      description: taskData.description || '',\n      status: 'pending',\n      priority: taskData.priority || 'medium',\n      dueDate: taskData.dueDate || new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0],\n      createdAt: new Date().toISOString()\n    };\n    response = {\n      success: true,\n      message: 'Task created successfully',\n      task: newTask\n    };\n    break;\n    \n  default:\n    response = {\n      success: false,\n      error: 'Invalid action. Supported: list, create'\n    };\n}\n\nresponse.dataSource = USE_MOCK_DATA ? 'mock' : 'mongodb';\nresponse.timestamp = new Date().toISOString();\n\nreturn [{ json: response }];"
+      },
+      "id": "1bc61207-6b61-4ca4-b63f-f84a182e6739",
+      "name": "Process Task Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "3c37cd90-d0c0-4cd6-912f-42a78252409d",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Task Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Task Action": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "d1b0677434545dc7167f4d21eff9392d609e94e2ea7906e38242045c57c64797"
+  }
+}

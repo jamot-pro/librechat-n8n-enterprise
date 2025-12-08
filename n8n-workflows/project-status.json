@@ -1,0 +1,77 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "librechat/project-status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b153a8cb-bf44-49ca-8cd2-a467a100e2d5",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        -64
+      ],
+      "webhookId": "project-status"
+    },
+    {
+      "parameters": {
+        "jsCode": "const USE_MOCK_DATA = true;\n\nconst requestData = $json.body || $json;\nconst context = requestData._context || {};\nconst projectId = requestData.projectId;\n\n// Validation\nif (!context || context.profileType !== 'customer') {\n  return [{\n    json: {\n      success: false,\n      error: 'Access denied: Customer profile required',\n      debug: {\n        receivedProfileType: context.profileType,\n        expectedProfileType: 'customer'\n      }\n    }\n  }];\n}\n\nfunction getMockProjects() {\n  return [\n    {\n      id: 'PRJ-001',\n      name: 'Website Redesign',\n      status: 'in-progress',\n      progress: 65,\n      startDate: '2024-11-01',\n      estimatedCompletion: '2024-12-31',\n      budget: 50000,\n      spent: 32500,\n      team: ['John Doe', 'Jane Smith', 'Bob Wilson'],\n      milestones: [\n        { name: 'Discovery', status: 'completed', date: '2024-11-05' },\n        { name: 'Design', status: 'completed', date: '2024-11-20' },\n        { name: 'Development', status: 'in-progress', date: '2024-12-15' },\n        { name: 'Testing', status: 'pending', date: '2024-12-20' },\n        { name: 'Launch', status: 'pending', date: '2024-12-31' }\n      ],\n      recentUpdates: [\n        { date: '2024-12-05', update: 'Homepage design approved by client' },\n        { date: '2024-12-03', update: 'Frontend development started' },\n        { date: '2024-12-01', update: 'Backend API integration completed' }\n      ]\n    },\n    {\n      id: 'PRJ-002',\n      name: 'Mobile App Development',\n      status: 'completed',\n      progress: 100,\n      startDate: '2024-09-01',\n      estimatedCompletion: '2024-11-30',\n      budget: 75000,\n      spent: 72000,\n      team: ['Alice Johnson', 'Mike Brown'],\n      milestones: [\n        { name: 'Planning', status: 'completed', date: '2024-09-10' },\n        { name: 'Design', status: 'completed', date: '2024-09-25' },\n        { name: 'Development', status: 'completed', date: '2024-11-10' },\n        { name: 'Testing', status: 'completed', date: '2024-11-20' },\n        { name: 'Launch', status: 'completed', date: '2024-11-30' }\n      ],\n      recentUpdates: [\n        { date: '2024-11-30', update: 'App successfully launched on App Store and Play Store' },\n        { date: '2024-11-28', update: 'Final QA testing completed' }\n      ]\n    }\n  ];\n}\n\nconst allProjects = getMockProjects();\nlet responseData = {};\n\nif (projectId) {\n  const project = allProjects.find(p => p.id === projectId);\n  if (!project) {\n    return [{\n      json: {\n        success: false,\n        error: `Project ${projectId} not found`,\n        availableProjects: allProjects.map(p => ({ id: p.id, name: p.name }))\n      }\n    }];\n  }\n  responseData = {\n    success: true,\n    project: project,\n    summary: `${project.name} is ${project.progress}% complete`,\n    nextMilestone: project.milestones.find(m => m.status === 'in-progress' || m.status === 'pending')\n  };\n} else {\n  responseData = {\n    success: true,\n    projects: allProjects,\n    summary: `You have ${allProjects.length} project(s)`,\n    activeProjects: allProjects.filter(p => p.status === 'in-progress').length,\n    completedProjects: allProjects.filter(p => p.status === 'completed').length\n  };\n}\n\nresponseData.dataSource = 'mock';\nresponseData.generatedAt = new Date().toISOString();\n\nreturn [{ json: responseData }];"
+      },
+      "id": "0b5430a4-407a-4646-9b8d-e1e485bb5a19",
+      "name": "Get Project Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "0f1ef54a-5536-4e27-9149-227b802f36a9",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        368,
+        -64
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Project Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Project Status": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "d1b0677434545dc7167f4d21eff9392d609e94e2ea7906e38242045c57c64797"
+  }
+}

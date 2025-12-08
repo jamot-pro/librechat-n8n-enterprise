@@ -1,0 +1,77 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "librechat/financial-analytics",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "46911e11-eb49-4ac8-bf4c-7a4814032d4a",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "financial-analytics"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// SMART MOCK DATA PATTERN - EASY TO SWITCH!\n// ============================================\nconst USE_MOCK_DATA = true; // ← Change to false when MongoDB ready\n\n// ============================================\n// VALIDATION\n// ============================================\nconst requestData = $json.body || $json;\nconst context = requestData._context;\n\nif (!context || context.profileType !== 'ceo') {\n  return [{\n    json: {\n      success: false,\n      error: 'Access denied: CEO profile required'\n    }\n  }];\n}\n\n// ============================================\n// MOCK DATA SOURCE\n// ============================================\nfunction getMockFinancialData() {\n  return {\n    period: 'Q4 2024',\n    revenue: 2500000,\n    expenses: 1800000,\n    profit: 700000,\n    profitMargin: 28,\n    growthRate: 15.3,\n    departments: [\n      { name: 'Sales', revenue: 1200000, expenses: 400000, profit: 800000 },\n      { name: 'Marketing', revenue: 800000, expenses: 600000, profit: 200000 },\n      { name: 'Operations', revenue: 500000, expenses: 800000, profit: -300000 }\n    ],\n    topProducts: [\n      { name: 'Product A', revenue: 1200000, growth: 25 },\n      { name: 'Product B', revenue: 800000, growth: 15 },\n      { name: 'Product C', revenue: 500000, growth: -5 }\n    ],\n    monthlyTrend: [\n      { month: 'Oct', revenue: 850000, profit: 230000 },\n      { month: 'Nov', revenue: 820000, profit: 225000 },\n      { month: 'Dec', revenue: 830000, profit: 245000 }\n    ]\n  };\n}\n\n// ============================================\n// REAL DATA SOURCE (MongoDB - Implement Later)\n// ============================================\nfunction getRealFinancialData() {\n  // TODO: Uncomment when MongoDB node is added\n  // const data = $('MongoDB').first().json;\n  // return data;\n  return getMockFinancialData(); // Fallback\n}\n\n// ============================================\n// MAIN LOGIC\n// ============================================\nconst financialData = USE_MOCK_DATA \n  ? getMockFinancialData() \n  : getRealFinancialData();\n\n// ============================================\n// RESPONSE\n// ============================================\nreturn [{\n  json: {\n    success: true,\n    data: financialData,\n    summary: `Revenue: $${(financialData.revenue/1000).toFixed(0)}K | Profit: $${(financialData.profit/1000).toFixed(0)}K | Margin: ${financialData.profitMargin}%`,\n    insights: [\n      `Revenue grew ${financialData.growthRate}% compared to Q3`,\n      `${financialData.departments[0].name} is top performer with $${(financialData.departments[0].revenue/1000).toFixed(0)}K revenue`,\n      `Overall profit margin of ${financialData.profitMargin}% exceeds industry average`\n    ],\n    dataSource: USE_MOCK_DATA ? 'mock' : 'mongodb',\n    generatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "bfa67a39-f604-4086-842d-021c20d1d795",
+      "name": "Process Financial Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "de15a438-2044-4029-8856-84ac12275bc1",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Financial Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Financial Data": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "d1b0677434545dc7167f4d21eff9392d609e94e2ea7906e38242045c57c64797"
+  }
+}
