@@ -18,6 +18,14 @@ const profileAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
     req.userId = decoded.userId || decoded.id;
 
+    // For compatibility: create req.user object
+    req.user = {
+      _id: req.userId,
+      id: req.userId,
+      email: decoded.email,
+      username: decoded.username || decoded.email,
+    };
+
     // Fetch user profile
     const profile = await Profile.findOne({ userId: req.userId });
     if (!profile) {
@@ -27,8 +35,9 @@ const profileAuth = async (req, res, next) => {
       });
     }
 
-    // Attach profile to request object
+    // Attach profile to request object (both names for compatibility)
     req.userProfile = profile;
+    req.profile = profile;
     // Log for debugging (remove in production)
     console.log(`[ProfileAuth] User ${req.userId} authenticated as ${profile.profileType}`);
     next();

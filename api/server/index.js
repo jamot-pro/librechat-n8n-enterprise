@@ -41,10 +41,11 @@ const { seedDatabase } = require('~/models');
 const routes = require('./routes');
 
 // --- N8N SAFE IMPORT ---
-let n8nRoutes, n8nProxy;
+let n8nRoutes, n8nProxy, librechatIntegrationRoutes;
 try {
   n8nRoutes = require('./routes/n8n');
   n8nProxy = require('./middleware/n8nProxy');
+  librechatIntegrationRoutes = require('./routes/librechat-integration');
 } catch (error) {
   console.warn('[Warning] N8n integration files not found:', error.message);
 }
@@ -229,6 +230,32 @@ const startServer = async () => {
     console.log('[OK] n8n integration loaded');
   } else {
     console.log('[SKIP] n8n integration (modules missing)');
+  }
+
+  // LibreChat Integration Routes (Direct n8n webhook endpoints)
+  if (librechatIntegrationRoutes) {
+    app.use('/api/librechat', librechatIntegrationRoutes);
+    console.log('[OK] LibreChat integration routes loaded');
+  } else {
+    console.log('[SKIP] LibreChat integration routes (module missing)');
+  }
+
+  // N8n Tools Routes (AI Function Calling Integration)
+  try {
+    const n8nToolsRoutes = require('./routes/n8n-tools');
+    app.use('/api/n8n-tools', n8nToolsRoutes);
+    console.log('[OK] N8n tools routes loaded (AI function calling)');
+  } catch (e) {
+    console.warn('[SKIP] N8n tools routes (error loading):', e.message);
+  }
+
+  // Profile route
+  try {
+    const profileRoutes = require('./routes/profile');
+    app.use('/api/profile', profileRoutes);
+    console.log('[OK] Profile routes loaded');
+  } catch (e) {
+    console.log('[SKIP] Profile routes (error loading)');
   }
 
   // Error Controller
