@@ -17,6 +17,7 @@ import StartupLayout from './Layouts/Startup';
 import LoginLayout from './Layouts/Login';
 import dashboardRoutes from './Dashboard';
 import ShareRoute from './ShareRoute';
+import ProfileRoute from './ProfileRoute';
 import ChatRoute from './ChatRoute';
 import Search from './Search';
 import Root from './Root';
@@ -110,6 +111,10 @@ export const router = createBrowserRouter(
             {
               path: 'search',
               element: <Search />,
+            },
+            {
+              path: 'profile',
+              element: <ProfileRoute />,
             },
             {
               path: 'agents',
