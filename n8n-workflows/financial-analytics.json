@@ -7,27 +7,50 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "46911e11-eb49-4ac8-bf4c-7a4814032d4a",
-      "name": "Webhook",
+      "id": "443257bf-006f-4057-affc-c9577395e007",
+      "name": "Webhook from AI",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        0,
-        0
+        528,
+        -128
       ],
-      "webhookId": "financial-analytics"
+      "webhookId": "37d014ab-5a5f-4934-9ba8-185a77db521c"
     },
     {
       "parameters": {
-        "jsCode": "// ============================================\n// SMART MOCK DATA PATTERN - EASY TO SWITCH!\n// ============================================\nconst USE_MOCK_DATA = true; // ← Change to false when MongoDB ready\n\n// ============================================\n// VALIDATION\n// ============================================\nconst requestData = $json.body || $json;\nconst context = requestData._context;\n\nif (!context || context.profileType !== 'ceo') {\n  return [{\n    json: {\n      success: false,\n      error: 'Access denied: CEO profile required'\n    }\n  }];\n}\n\n// ============================================\n// MOCK DATA SOURCE\n// ============================================\nfunction getMockFinancialData() {\n  return {\n    period: 'Q4 2024',\n    revenue: 2500000,\n    expenses: 1800000,\n    profit: 700000,\n    profitMargin: 28,\n    growthRate: 15.3,\n    departments: [\n      { name: 'Sales', revenue: 1200000, expenses: 400000, profit: 800000 },\n      { name: 'Marketing', revenue: 800000, expenses: 600000, profit: 200000 },\n      { name: 'Operations', revenue: 500000, expenses: 800000, profit: -300000 }\n    ],\n    topProducts: [\n      { name: 'Product A', revenue: 1200000, growth: 25 },\n      { name: 'Product B', revenue: 800000, growth: 15 },\n      { name: 'Product C', revenue: 500000, growth: -5 }\n    ],\n    monthlyTrend: [\n      { month: 'Oct', revenue: 850000, profit: 230000 },\n      { month: 'Nov', revenue: 820000, profit: 225000 },\n      { month: 'Dec', revenue: 830000, profit: 245000 }\n    ]\n  };\n}\n\n// ============================================\n// REAL DATA SOURCE (MongoDB - Implement Later)\n// ============================================\nfunction getRealFinancialData() {\n  // TODO: Uncomment when MongoDB node is added\n  // const data = $('MongoDB').first().json;\n  // return data;\n  return getMockFinancialData(); // Fallback\n}\n\n// ============================================\n// MAIN LOGIC\n// ============================================\nconst financialData = USE_MOCK_DATA \n  ? getMockFinancialData() \n  : getRealFinancialData();\n\n// ============================================\n// RESPONSE\n// ============================================\nreturn [{\n  json: {\n    success: true,\n    data: financialData,\n    summary: `Revenue: $${(financialData.revenue/1000).toFixed(0)}K | Profit: $${(financialData.profit/1000).toFixed(0)}K | Margin: ${financialData.profitMargin}%`,\n    insights: [\n      `Revenue grew ${financialData.growthRate}% compared to Q3`,\n      `${financialData.departments[0].name} is top performer with $${(financialData.departments[0].revenue/1000).toFixed(0)}K revenue`,\n      `Overall profit margin of ${financialData.profitMargin}% exceeds industry average`\n    ],\n    dataSource: USE_MOCK_DATA ? 'mock' : 'mongodb',\n    generatedAt: new Date().toISOString()\n  }\n}];"
+        "collection": "financial_records",
+        "options": {
+          "limit": 30,
+          "sort": "{\"timestamp\": -1}"
+        }
       },
-      "id": "bfa67a39-f604-4086-842d-021c20d1d795",
-      "name": "Process Financial Data",
+      "id": "693720cb-1862-4eaa-956c-821a818aa947",
+      "name": "Fetch Real Data",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1,
+      "position": [
+        752,
+        -128
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "ZOUv88AGMpGgCk9q",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// CONFIGURATION\n// ============================================\n// Ubah ke 'false' jika sudah connect ke MongoDB Node\nconst USE_MOCK_DATA = false; \n\n// ============================================\n// 1. VALIDATION LAYER\n// ============================================\n// LibreChat sends profileType in _context object\nlet profileType;\nlet webhookData;\n\ntry {\n  // Get webhook payload\n  webhookData = $('Webhook from AI').first().json.body;\n  \n  // LibreChat sends: { period: \"...\", _context: { profileType: \"ceo\", profile: {...} } }\n  if (webhookData._context && webhookData._context.profile) {\n    profileType = webhookData._context.profile.profileType;\n  } else if (webhookData._context && webhookData._context.profileType) {\n    profileType = webhookData._context.profileType;\n  } else {\n    // Fallback for direct testing\n    profileType = webhookData.profileType;\n  }\n} catch (e) {\n  // Fallback jika testing direct tanpa webhook\n  const requestData = $json.body || $json;\n  if (requestData._context && requestData._context.profile) {\n    profileType = requestData._context.profile.profileType;\n  } else if (requestData._context) {\n    profileType = requestData._context.profileType;\n  } else {\n    profileType = requestData.profileType;\n  }\n}\n\n// Log for debugging (remove in production)\nconsole.log('LibreChat Auth Check:', {\n  profileType,\n  hasContext: !!webhookData?._context,\n  hasProfile: !!webhookData?._context?.profile\n});\n\nif (profileType !== 'ceo') {\n  return [{\n    json: {\n      success: false,\n      error: 'Access denied: CEO profile required',\n      debug: {\n        receivedProfileType: profileType,\n        requiredProfileType: 'ceo'\n      }\n    }\n  }];\n}\n\n// ============================================\n// 2. REAL DATA ENGINE (Calculation Logic)\n// ============================================\nfunction getRealFinancialData() {\n  // Ambil semua row dari MongoDB\n  const records = $input.all().map(item => item.json);\n\n  // Jika Database Kosong\n  if (records.length === 0) {\n    return {\n      data: { period: 'No Data', revenue: 0, profit: 0, profitMargin: 0, monthlyTrend: [] },\n      summary: 'Database is empty.',\n      insights: ['No records found within the selected range']\n    };\n  }\n\n  // Agregasi Data\n  let totalRevenue = 0;\n  let totalProfit = 0;\n  let totalExpenses = 0;\n\n  records.forEach(rec => {\n    totalRevenue += (rec.daily_revenue || 0);\n    totalProfit += (rec.daily_profit || 0);\n    totalExpenses += (rec.daily_expenses || 0);\n  });\n\n  // Hitung Margin\n  const margin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : 0;\n\n  // Siapkan Trend (5 data terakhir)\n  const trend = records.slice(0, 5).map(r => ({\n    month: r.date, // Menggunakan field date sebagai label\n    revenue: r.daily_revenue,\n    profit: r.daily_profit\n  }));\n\n  return {\n    data: {\n      period: 'Live Data (Real-time)',\n      revenue: totalRevenue,\n      expenses: totalExpenses,\n      profit: totalProfit,\n      profitMargin: margin,\n      monthlyTrend: trend,\n      growthRate: 0 // Placeholder jika belum ada data bulan lalu\n    },\n    summary: `Revenue: $${(totalRevenue/1000).toFixed(0)}K | Profit: $${(totalProfit/1000).toFixed(0)}K | Margin: ${margin}%`,\n    insights: [\n      `Analysis based on ${records.length} live records`,\n      `Latest data point from ${records[0].date}`,\n      `Current profit margin is ${margin}%`\n    ]\n  };\n}\n\n// ============================================\n// 3. MOCK DATA ENGINE (Static Pattern)\n// ============================================\nfunction getMockFinancialData() {\n  const mockData = {\n    period: 'Q4 2024 (Mock)',\n    revenue: 2500000,\n    expenses: 1800000,\n    profit: 700000,\n    profitMargin: 28,\n    growthRate: 15.3,\n    monthlyTrend: [\n      { month: 'Oct', revenue: 850000, profit: 230000 },\n      { month: 'Nov', revenue: 820000, profit: 225000 },\n      { month: 'Dec', revenue: 830000, profit: 245000 }\n    ]\n  };\n\n  return {\n    data: mockData,\n    summary: `Revenue: $${(mockData.revenue/1000).toFixed(0)}K | Profit: $${(mockData.profit/1000).toFixed(0)}K | Margin: ${mockData.profitMargin}%`,\n    insights: [\n      `Revenue grew ${mockData.growthRate}% compared to Q3`,\n      `Sales department is top performer`,\n      `Overall profit margin of ${mockData.profitMargin}% exceeds industry average`\n    ]\n  };\n}\n\n// ============================================\n// 4. MAIN EXECUTION\n// ============================================\nconst result = USE_MOCK_DATA \n  ? getMockFinancialData() \n  : getRealFinancialData();\n\n// ============================================\n// 5. FINAL RESPONSE\n// ============================================\nreturn [{\n  json: {\n    success: true,\n    data: result.data,\n    summary: result.summary,\n    insights: result.insights,\n    dataSource: USE_MOCK_DATA ? 'mock' : 'mongodb-atlas',\n    generatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "00e13464-a64f-4f7f-bdf2-e716dd8b1ef9",
+      "name": "Calculate Stats",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        224,
-        0
+        976,
+        -128
       ]
     },
     {
@@ -36,33 +59,44 @@
         "responseBody": "={{ $json }}",
         "options": {}
       },
-      "id": "de15a438-2044-4029-8856-84ac12275bc1",
-      "name": "Respond to Webhook",
+      "id": "ffa387d7-51d1-4347-a644-6df0db9a623f",
+      "name": "Respond to AI",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        448,
-        0
+        1200,
+        -128
       ]
     }
   ],
   "connections": {
-    "Webhook": {
+    "Webhook from AI": {
       "main": [
         [
           {
-            "node": "Process Financial Data",
+            "node": "Fetch Real Data",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Process Financial Data": {
+    "Fetch Real Data": {
       "main": [
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Calculate Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Stats": {
+      "main": [
+        [
+          {
+            "node": "Respond to AI",
             "type": "main",
             "index": 0
           }
@@ -72,6 +106,7 @@
   },
   "pinData": {},
   "meta": {
-    "instanceId": "d1b0677434545dc7167f4d21eff9392d609e94e2ea7906e38242045c57c64797"
+    "templateCredsSetupCompleted": true,
+    "instanceId": "05497ba94261f14019e7e74a6f3aa0dce980e663b1492e1d129ee13898fae518"
   }
 }

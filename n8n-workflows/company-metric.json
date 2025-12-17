@@ -7,27 +7,50 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "2137d10d-b85e-41de-901b-2a8dd8727063",
+      "id": "60c6e013-0572-4801-84bc-458a61268522",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        0,
-        0
+        528,
+        128
       ],
       "webhookId": "company-metrics"
     },
     {
       "parameters": {
-        "jsCode": "// ============================================\n// SMART MOCK DATA PATTERN\n// ============================================\nconst USE_MOCK_DATA = true; // ← Change to false when MongoDB ready\n\n// ============================================\n// VALIDATION\n// ============================================\nconst requestData = $json.body || $json;\nconst context = requestData._context;\n\nif (!context || context.profileType !== 'ceo') {\n  return [{\n    json: {\n      success: false,\n      error: 'Access denied: CEO profile required'\n    }\n  }];\n}\n\n// ============================================\n// MOCK DATA SOURCE\n// ============================================\nfunction getMockCompanyMetrics() {\n  return {\n    overall: {\n      employeeCount: 150,\n      customerCount: 2500,\n      activeProjects: 45,\n      completionRate: 92,\n      customerSatisfaction: 4.6\n    },\n    departments: [\n      {\n        name: 'Engineering',\n        employees: 45,\n        productivity: 87,\n        projectsCompleted: 12,\n        budget: 850000,\n        spent: 780000\n      },\n      {\n        name: 'Sales',\n        employees: 30,\n        productivity: 92,\n        dealsWon: 156,\n        revenue: 2100000,\n        target: 2000000\n      },\n      {\n        name: 'Marketing',\n        employees: 25,\n        productivity: 85,\n        campaigns: 8,\n        leads: 1200,\n        conversions: 240\n      },\n      {\n        name: 'Customer Support',\n        employees: 20,\n        productivity: 94,\n        ticketsResolved: 3500,\n        avgResponseTime: '2.3 hours',\n        satisfaction: 4.7\n      }\n    ],\n    quarterlyGoals: [\n      { goal: 'Increase revenue by 20%', progress: 78, status: 'on-track' },\n      { goal: 'Launch 3 new products', progress: 66, status: 'on-track' },\n      { goal: 'Reduce costs by 10%', progress: 45, status: 'at-risk' },\n      { goal: 'Improve NPS to 50+', progress: 92, status: 'achieved' }\n    ]\n  };\n}\n\n// ============================================\n// REAL DATA SOURCE (MongoDB)\n// ============================================\nfunction getRealCompanyMetrics() {\n  // TODO: Connect to MongoDB\n  return getMockCompanyMetrics();\n}\n\n// ============================================\n// MAIN LOGIC\n// ============================================\nconst metricsData = USE_MOCK_DATA \n  ? getMockCompanyMetrics() \n  : getRealCompanyMetrics();\n\n// ============================================\n// RESPONSE\n// ============================================\nreturn [{\n  json: {\n    success: true,\n    data: metricsData,\n    summary: `${metricsData.overall.employeeCount} employees | ${metricsData.overall.activeProjects} active projects | ${metricsData.overall.customerSatisfaction}/5.0 satisfaction`,\n    highlights: [\n      `Sales exceeded target by ${((metricsData.departments[1].revenue / metricsData.departments[1].target - 1) * 100).toFixed(1)}%`,\n      `${metricsData.quarterlyGoals.filter(g => g.status === 'achieved').length} quarterly goals achieved`,\n      `Customer Support maintains ${metricsData.departments[3].satisfaction}/5.0 rating`\n    ],\n    dataSource: USE_MOCK_DATA ? 'mock' : 'mongodb',\n    generatedAt: new Date().toISOString()\n  }\n}];"
+        "collection": "company_reports",
+        "options": {
+          "limit": 1,
+          "sort": "{\"timestamp\": -1}"
+        }
       },
-      "id": "84096eb3-5ab3-4091-aa79-abc51a4119c0",
+      "id": "d8ef6d1f-1cea-4c17-b7e1-b3ca53c68c10",
+      "name": "Fetch Latest Report",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1,
+      "position": [
+        752,
+        128
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "ZOUv88AGMpGgCk9q",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// CONFIGURATION\n// ============================================\n// Ubah ke 'false' karena kita sekarang pakai MongoDB\nconst USE_MOCK_DATA = false; \n\n// ============================================\n// 1. VALIDATION LAYER\n// ============================================\n// Kita ambil profileType langsung dari Node Webhook\n// karena input node ini sekarang adalah data MongoDB (bukan webhook body)\nlet profileType;\ntry {\n  profileType = $('Webhook').first().json.body.profileType;\n} catch (error) {\n  // Fallback jika ditest manual tanpa webhook\n  profileType = $json.body ? $json.body.profileType : null;\n}\n\nif (profileType !== 'ceo') {\n  return [{\n    json: {\n      success: false,\n      error: 'Access denied: CEO profile required'\n    }\n  }];\n}\n\n// ============================================\n// 2. MOCK DATA SOURCE (Fallback)\n// ============================================\nfunction getMockCompanyMetrics() {\n  return {\n    overall: { employeeCount: 150, activeProjects: 45, customerSatisfaction: 4.6 },\n    departments: [\n      { name: 'Sales', revenue: 2100000, target: 2000000 },\n      { name: 'Customer Support', satisfaction: 4.7 }\n    ],\n    quarterlyGoals: [{ status: 'achieved' }]\n  };\n}\n\n// ============================================\n// 3. REAL DATA SOURCE (From MongoDB Node)\n// ============================================\nfunction getRealCompanyMetrics() {\n  // Mengambil data dari node sebelumnya (Fetch Latest Report)\n  const records = $input.all();\n  \n  if (records.length === 0) {\n    throw new Error(\"Database is empty. No reports found.\");\n  }\n  \n  // Ambil item pertama (karena kita limit 1)\n  return records[0].json;\n}\n\n// ============================================\n// 4. MAIN EXECUTION\n// ============================================\nlet metricsData;\ntry {\n  metricsData = USE_MOCK_DATA \n    ? getMockCompanyMetrics() \n    : getRealCompanyMetrics();\n} catch (err) {\n  return [{ json: { success: false, error: err.message } }];\n}\n\n// ============================================\n// 5. DATA SAFETY CHECKS\n// ============================================\n// Mencegah error jika urutan departemen di DB berubah\nconst salesDept = metricsData.departments.find(d => d.name === 'Sales') || { revenue: 0, target: 1 };\nconst supportDept = metricsData.departments.find(d => d.name === 'Customer Support') || { satisfaction: 0 };\nconst achievedGoals = (metricsData.quarterlyGoals || []).filter(g => g.status === 'achieved').length;\n\n// Hitung persentase performa sales\nconst salesPerformance = ((salesDept.revenue / salesDept.target - 1) * 100).toFixed(1);\n\n// ============================================\n// 6. FINAL RESPONSE\n// ============================================\nreturn [{\n  json: {\n    success: true,\n    data: metricsData,\n    summary: `${metricsData.overall.employeeCount} employees | ${metricsData.overall.activeProjects} active projects | ${metricsData.overall.customerSatisfaction}/5.0 satisfaction`,\n    highlights: [\n      `Sales exceeded target by ${salesPerformance}%`,\n      `${achievedGoals} quarterly goals achieved`,\n      `Customer Support maintains ${supportDept.satisfaction}/5.0 rating`\n    ],\n    dataSource: USE_MOCK_DATA ? 'mock' : 'mongodb',\n    generatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "7a6f55f7-7842-4bd0-928d-f34c44c1eeab",
       "name": "Process Company Metrics",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        224,
-        0
+        976,
+        128
       ]
     },
     {
@@ -36,18 +59,29 @@
         "responseBody": "={{ $json }}",
         "options": {}
       },
-      "id": "4b14c94f-8205-433f-b264-12e54b3e8b1f",
+      "id": "cd751989-d9cd-4e9f-846b-a7154bf892ac",
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        448,
-        0
+        1200,
+        128
       ]
     }
   ],
   "connections": {
     "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch Latest Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Latest Report": {
       "main": [
         [
           {
@@ -72,6 +106,7 @@
   },
   "pinData": {},
   "meta": {
-    "instanceId": "d1b0677434545dc7167f4d21eff9392d609e94e2ea7906e38242045c57c64797"
+    "templateCredsSetupCompleted": true,
+    "instanceId": "05497ba94261f14019e7e74a6f3aa0dce980e663b1492e1d129ee13898fae518"
   }
 }
