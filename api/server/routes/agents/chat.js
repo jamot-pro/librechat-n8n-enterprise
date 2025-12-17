@@ -9,6 +9,7 @@ const {
   buildEndpointOption,
   canAccessAgentFromBody,
 } = require('~/server/middleware');
+const injectN8nTools = require('~/server/middleware/injectN8nTools');
 const { initializeClient } = require('~/server/services/Endpoints/agents');
 const AgentController = require('~/server/controllers/agents/request');
 const addTitle = require('~/server/services/Endpoints/agents/title');
@@ -32,6 +33,7 @@ router.use(checkAgentAccess);
 router.use(checkAgentResourceAccess);
 router.use(validateConvoAccess);
 router.use(buildEndpointOption);
+router.use(injectN8nTools); // Inject n8n tools AFTER buildEndpointOption, user is already authenticated
 router.use(setHeaders);
 
 const controller = async (req, res, next) => {
