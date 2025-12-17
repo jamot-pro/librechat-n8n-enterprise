@@ -388,12 +388,19 @@ class N8nToolService {
           username: context.username,
           timestamp: new Date().toISOString(),
           functionName: functionName,
+          // Include full profile info if available
+          profile: context.profile || {
+            profileType: context.profileType,
+          },
         },
       };
 
       // Call n8n webhook
       const url = `${N8N_WEBHOOK_URL}${tool.endpoint}`;
-      logger.info(`[N8nToolService] Calling n8n: ${url}`);
+      logger.info(`[N8nToolService] Calling n8n: ${url}`, {
+        profileType: context.profileType,
+        hasFullProfile: !!context.profile,
+      });
 
       const response = await axios.post(url, payload, {
         timeout: N8N_TIMEOUT,

@@ -26,6 +26,8 @@ const edit = require('./edit');
 const keys = require('./keys');
 const user = require('./user');
 const mcp = require('./mcp');
+const profile = require('./profile');
+const n8ntools = require('./n8n-tools');
 
 module.exports = {
   mcp,
@@ -56,4 +58,6 @@ module.exports = {
   categories,
   staticRoute,
   accessPermissions,
+  profile,
+  n8ntools,
 };

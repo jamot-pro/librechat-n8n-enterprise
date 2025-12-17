@@ -1,10 +1,94 @@
 const express = require('express');
+const jwt = require('jsonwebtoken');
 const { logger } = require('@librechat/data-schemas');
 const n8nToolService = require('../services/N8nToolService');
 const n8nToolExecutor = require('../services/N8nToolExecutor');
 const profileAuth = require('../middleware/profileAuth');
+const Profile = require('../models/Profile');
 
 const router = express.Router();
+
+/**
+ * POST /api/n8n-tools/setup-profile
+ * Initialize user profile (CEO/Employee/Customer)
+ * Note: This does NOT use profileAuth because the profile doesn't exist yet.
+ */
+router.post('/setup-profile', async (req, res) => {
+  try {
+    // 1. Manual Auth Check (Bypassing profileAuth)
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const secret = process.env.JWT_SECRET || process.env.CREDS_JWT_SECRET || 'secret';
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secret);
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    const userId = decoded.userId || decoded.id;
+    const { role } = req.body; // Expecting: { "role": "ceo" }
+
+    if (!['ceo', 'employee', 'customer'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Use: ceo, employee, or customer' });
+    }
+
+    // 2. Define Workflows based on Role
+    let workflows = [];
+    if (role === 'ceo') {
+      workflows = [
+        { workflowId: 'wf_financial_analytics', workflowName: 'Financial Analytics' },
+        { workflowId: 'wf_company_metrics', workflowName: 'Company Metrics' },
+        { workflowId: 'wf_doc_search', workflowName: 'Document Search' },
+      ];
+    } else if (role === 'employee') {
+      workflows = [
+        { workflowId: 'wf_task_management', workflowName: 'Task Management' },
+        { workflowId: 'wf_doc_search', workflowName: 'Document Search' },
+      ];
+    } else {
+      workflows = [
+        { workflowId: 'wf_support_ticket', workflowName: 'Support Tickets' },
+        { workflowId: 'wf_project_status', workflowName: 'Project Status' },
+      ];
+    }
+
+    // 3. Save to MongoDB (Upsert = Create if not exists, Update if exists)
+    const profile = await Profile.findOneAndUpdate(
+      { userId: userId },
+      {
+        userId: userId,
+        profileType: role,
+        permissions: ['read', 'write'],
+        allowedWorkflows: workflows,
+        metadata: {
+          department: role === 'ceo' ? 'Executive' : 'Operations',
+          companyId: 'JAMOT-HQ',
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+
+    // Clear cache so the new profile is loaded immediately
+    n8nToolService.clearCache();
+
+    logger.info(`[Setup] Profile created for user ${userId} as ${role}`);
+
+    res.json({
+      success: true,
+      message: `Profile initialized successfully as ${role.toUpperCase()}`,
+      profile,
+    });
+  } catch (error) {
+    logger.error('[Setup] Error creating profile:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 /**
  * GET /api/n8n-tools

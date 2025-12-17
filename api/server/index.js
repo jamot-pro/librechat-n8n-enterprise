@@ -166,6 +166,25 @@ const startServer = async () => {
     await configureSocialLogins(app);
   }
 
+  // N8n Tools Middleware - Load n8n workflows as AI function tools
+  try {
+    const { loadN8nTools } = require('./middleware/loadN8nTools');
+    app.use(loadN8nTools);
+    console.log('[OK] N8n tools middleware loaded (function calling enabled)');
+  } catch (e) {
+    console.warn('[SKIP] N8n tools middleware:', e.message);
+  }
+
+  // N8n Tools Injection Middleware - Inject tools into endpointOption
+  // MUST be AFTER passport init (so req.user exists) but BEFORE routes
+  try {
+    const injectN8nTools = require('./middleware/injectN8nTools');
+    app.use(injectN8nTools); // Apply to ALL requests (not just /api/*)
+    console.log('[OK] N8n tools injection middleware loaded (global)');
+  } catch (e) {
+    console.warn('[SKIP] N8n tools injection middleware:', e.message);
+  }
+
   console.log('--- [DEBUG] Checkpoint 3: Routes (SAFE MODE) ---');
 
   const safeRoute = (path, handler, name) => {
