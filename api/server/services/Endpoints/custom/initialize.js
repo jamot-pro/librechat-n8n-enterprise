@@ -10,6 +10,8 @@ const { getUserKeyValues, checkUserKeyExpiry } = require('~/server/services/User
 const { fetchModels } = require('~/server/services/ModelService');
 const OpenAIClient = require('~/app/clients/OpenAIClient');
 const getLogStores = require('~/cache/getLogStores');
+const n8nToolExecutor = require('~/server/services/N8nToolExecutor');
+const { logger } = require('@librechat/data-schemas');
 
 const { PROXY } = process.env;
 
@@ -135,6 +137,31 @@ const initializeClient = async ({ req, res, endpointOption, optionsOnly, overrid
       clientOptions,
     );
     clientOptions.modelOptions.user = req.user.id;
+
+    // === N8N TOOLS INJECTION (optionsOnly path) ===
+    logger.info('[Custom Initialize] === N8N TOOLS INJECTION START (optionsOnly path) ===');
+    try {
+      if (req.user && req.user.id) {
+        logger.info('[Custom Initialize] Loading n8n tools for user:', req.user.id);
+        const n8nTools = await n8nToolExecutor.loadUserTools({ _id: req.user.id });
+
+        logger.info('[Custom Initialize] Tools loaded:', {
+          toolCount: n8nTools?.length || 0,
+          toolNames: n8nTools?.map((t) => t.function?.name) || [],
+        });
+
+        if (n8nTools && n8nTools.length > 0) {
+          clientOptions.modelOptions.tools = n8nTools;
+          logger.info(
+            `[Custom Initialize] ✅ Injected ${n8nTools.length} n8n tools into optionsOnly path`,
+          );
+        }
+      }
+    } catch (error) {
+      logger.error('[Custom Initialize] ❌ Error loading n8n tools (optionsOnly path):', error);
+    }
+    logger.info('[Custom Initialize] === N8N TOOLS INJECTION END (optionsOnly path) ===');
+
     const options = getOpenAIConfig(apiKey, clientOptions, endpoint);
     if (options != null) {
       options.useLegacyContent = true;
@@ -146,6 +173,62 @@ const initializeClient = async ({ req, res, endpointOption, optionsOnly, overrid
     options.llmConfig._lc_stream_delay = clientOptions.streamRate;
     return options;
   }
+
+  // === N8N TOOLS INJECTION (CUSTOM ENDPOINT) ===
+  // Load user's n8n workflow tools and inject them into modelOptions
+  logger.info('[Custom Initialize] === N8N TOOLS INJECTION START ===');
+  logger.info('[Custom Initialize] User object:', {
+    hasUser: !!req.user,
+    userId: req.user?.id,
+    userIdUnderscore: req.user?._id,
+  });
+
+  try {
+    if (req.user && req.user.id) {
+      logger.info('[Custom Initialize] Loading n8n tools for user:', req.user.id);
+
+      const n8nTools = await n8nToolExecutor.loadUserTools({ _id: req.user.id });
+
+      logger.info('[Custom Initialize] Tools loaded:', {
+        toolCount: n8nTools?.length || 0,
+        toolNames: n8nTools?.map((t) => t.function?.name) || [],
+      });
+
+      if (n8nTools && n8nTools.length > 0) {
+        // Initialize modelOptions.tools if it doesn't exist
+        if (!clientOptions.modelOptions) {
+          clientOptions.modelOptions = {};
+        }
+
+        // CRITICAL: Remove _metadata from tools (not part of OpenAI spec)
+        const cleanTools = n8nTools.map((tool) => ({
+          type: tool.type,
+          function: tool.function,
+        }));
+
+        // Inject n8n tools into modelOptions (OpenAI expects "tools" array)
+        clientOptions.modelOptions.tools = cleanTools;
+
+        logger.info(
+          `[Custom Initialize] ✅ Successfully injected ${cleanTools.length} n8n tools into clientOptions.modelOptions`,
+          {
+            userId: req.user.id,
+            toolNames: cleanTools.map((t) => t.function?.name),
+          },
+        );
+      } else {
+        logger.warn('[Custom Initialize] No tools loaded for user');
+      }
+    } else {
+      logger.warn('[Custom Initialize] No user object or user.id found, skipping n8n tools');
+    }
+  } catch (error) {
+    logger.error('[Custom Initialize] ❌ Error loading n8n tools:', error);
+    logger.error('[Custom Initialize] Error stack:', error.stack);
+    // Don't block initialization if tool loading fails
+  }
+
+  logger.info('[Custom Initialize] === N8N TOOLS INJECTION END ===');
 
   const client = new OpenAIClient(apiKey, clientOptions);
   return {

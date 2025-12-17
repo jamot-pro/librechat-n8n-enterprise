@@ -8,6 +8,8 @@ const {
 } = require('@librechat/api');
 const { getUserKeyValues, checkUserKeyExpiry } = require('~/server/services/UserService');
 const OpenAIClient = require('~/app/clients/OpenAIClient');
+const n8nToolExecutor = require('~/server/services/N8nToolExecutor');
+const { logger } = require('@librechat/data-schemas');
 
 const initializeClient = async ({
   req,
@@ -153,6 +155,56 @@ const initializeClient = async ({
     options.llmConfig._lc_stream_delay = streamRate;
     return options;
   }
+
+  // === N8N TOOLS INJECTION ===
+  // Load user's n8n workflow tools and inject them into modelOptions
+  logger.info('[OpenAI Initialize] === N8N TOOLS INJECTION START ===');
+  logger.info('[OpenAI Initialize] User object:', {
+    hasUser: !!req.user,
+    userId: req.user?.id,
+    userIdUnderscore: req.user?._id,
+  });
+
+  try {
+    if (req.user && req.user.id) {
+      logger.info('[OpenAI Initialize] Loading n8n tools for user:', req.user.id);
+
+      const n8nTools = await n8nToolExecutor.loadUserTools({ _id: req.user.id });
+
+      logger.info('[OpenAI Initialize] Tools loaded:', {
+        toolCount: n8nTools?.length || 0,
+        toolNames: n8nTools?.map((t) => t.function?.name) || [],
+      });
+
+      if (n8nTools && n8nTools.length > 0) {
+        // Initialize modelOptions.tools if it doesn't exist
+        if (!clientOptions.modelOptions) {
+          clientOptions.modelOptions = {};
+        }
+
+        // Inject n8n tools into modelOptions (OpenAI expects "tools" array)
+        clientOptions.modelOptions.tools = n8nTools;
+
+        logger.info(
+          `[OpenAI Initialize] ✅ Successfully injected ${n8nTools.length} n8n tools into modelOptions`,
+          {
+            userId: req.user.id,
+            toolNames: n8nTools.map((t) => t.function?.name),
+          },
+        );
+      } else {
+        logger.warn('[OpenAI Initialize] No tools loaded for user');
+      }
+    } else {
+      logger.warn('[OpenAI Initialize] No user object or user.id found, skipping n8n tools');
+    }
+  } catch (error) {
+    logger.error('[OpenAI Initialize] ❌ Error loading n8n tools:', error);
+    logger.error('[OpenAI Initialize] Error stack:', error.stack);
+    // Don't block initialization if tool loading fails
+  }
+
+  logger.info('[OpenAI Initialize] === N8N TOOLS INJECTION END ===');
 
   const client = new OpenAIClient(apiKey, Object.assign({ req, res }, clientOptions));
   return {

@@ -21,6 +21,8 @@ const { loadAgentTools } = require('~/server/services/ToolService');
 const AgentClient = require('~/server/controllers/agents/client');
 const { getAgent } = require('~/models/Agent');
 const { logViolation } = require('~/cache');
+const n8nToolExecutor = require('~/server/services/N8nToolExecutor');
+const { loadN8nStructuredTools } = require('~/server/services/N8nToolWrapper');
 
 /**
  * @param {AbortSignal} signal
@@ -44,13 +46,46 @@ function createToolLoader(signal) {
   return async function loadTools({ req, res, agentId, tools, provider, model, tool_resources }) {
     const agent = { id: agentId, tools, provider, model };
     try {
-      return await loadAgentTools({
+      const result = await loadAgentTools({
         req,
         res,
         agent,
         signal,
         tool_resources,
       });
+
+      // === INJECT N8N STRUCTURED TOOLS ===
+      // Load n8n workflows as executable LangChain StructuredTool instances
+      if (req.user) {
+        try {
+          logger.info('[Agents Initialize] Loading n8n StructuredTools for user', {
+            userId: req.user.id,
+          });
+
+          const n8nTools = await loadN8nStructuredTools(req.user);
+
+          if (n8nTools && n8nTools.length > 0) {
+            if (!result) {
+              return {
+                tools: n8nTools,
+                toolContextMap: {},
+              };
+            }
+
+            // Merge n8n tools with existing agent tools
+            result.tools = [...(result.tools || []), ...n8nTools];
+
+            logger.info(`[Agents Initialize] ✅ Injected ${n8nTools.length} n8n StructuredTools`, {
+              totalTools: result.tools.length,
+              n8nToolNames: n8nTools.map((t) => t.name),
+            });
+          }
+        } catch (error) {
+          logger.error('[Agents Initialize] Error loading n8n StructuredTools:', error);
+        }
+      }
+
+      return result;
     } catch (error) {
       logger.error('Error loading tools for agent ' + agentId, error);
     }
