@@ -38,9 +38,17 @@ RUN \
 
 COPY --chown=node:node . .
 
+# RUN \
+#     # React client build
+#     NODE_OPTIONS="--max-old-space-size=2048" npm run frontend; \
+#     npm prune --production; \
+#     npm cache clean --force
+#
+RUN npm run build:packages
+
 RUN \
     # React client build
-    NODE_OPTIONS="--max-old-space-size=2048" npm run frontend; \
+    NODE_OPTIONS="--max-old-space-size=2048" npm run build:client; \
     npm prune --production; \
     npm cache clean --force
 
