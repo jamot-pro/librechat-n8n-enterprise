@@ -33,7 +33,7 @@ RUN \
     npm config set fetch-retries 5 ; \
     npm config set fetch-retry-mintimeout 15000 ; \
     npm install --no-audit --legacy-peer-deps ; \
-    npm install @rollup/rollup-linux-x64-musl --no-save
+    npm install @rollup/rollup-linux-x64-musl sharp --no-save --os=linux --libc=musl --cpu=x64
 
 COPY --chown=node:node . .
 
