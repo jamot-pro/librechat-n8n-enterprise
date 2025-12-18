@@ -32,7 +32,8 @@ RUN \
     npm config set fetch-retry-maxtimeout 600000 ; \
     npm config set fetch-retries 5 ; \
     npm config set fetch-retry-mintimeout 15000 ; \
-    npm install --no-audit --legacy-peer-deps
+    npm install --no-audit --legacy-peer-deps ; \
+    npm install @rollup/rollup-linux-x64-musl --no-save
 
 COPY --chown=node:node . .
 
