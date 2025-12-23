@@ -1,7 +1,9 @@
 # v0.8.1-rc2
 
 # Base node image
-FROM node:20-alpine AS node
+# FROM node:20-alpine AS node
+FROM node:20-bullseye AS node
+
 
 # Install jemalloc
 RUN apk add --no-cache jemalloc
@@ -40,7 +42,7 @@ COPY --chown=node:node . .
 
 RUN \
     # React client build
-    NODE_OPTIONS="--max-old-space-size=5048" npm run frontend; \
+    NODE_OPTIONS="--max-old-space-size=2048" npm run frontend; \
     npm prune --production; \
     npm cache clean --force
 
