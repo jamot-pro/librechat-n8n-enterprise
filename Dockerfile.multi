@@ -76,6 +76,8 @@ COPY --from=data-provider-build /app/packages/data-provider ./packages/data-prov
 COPY --from=data-schemas-build /app/packages/data-schemas ./packages/data-schemas
 COPY --from=api-package-build /app/packages/api ./packages/api
 COPY --from=client-build /app/client/dist ./client/dist
+# Install missing peer dependencies
+RUN npm install @opentelemetry/exporter-trace-otlp-http @opentelemetry/sdk-node @opentelemetry/api --legacy-peer-deps
 WORKDIR /app/api
 EXPOSE 3080
 ENV HOST=0.0.0.0
