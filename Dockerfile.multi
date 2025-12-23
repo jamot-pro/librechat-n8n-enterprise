@@ -80,6 +80,6 @@ COPY --from=client-build /app/client/dist ./client/dist
 RUN npm install @opentelemetry/exporter-trace-otlp-http @opentelemetry/sdk-node @opentelemetry/api --legacy-peer-deps && \
     cd /app/api && npm install sharp --os=linux --cpu=x64
 WORKDIR /app/api
-EXPOSE 3080
+EXPOSE 3000
 ENV HOST=0.0.0.0
 CMD ["node", "server/index.js"]
