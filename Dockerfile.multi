@@ -87,8 +87,7 @@ COPY client/package*.json ./client/
 COPY api/package*.json ./api/
 
 # Install only production deps
-RUN npm install --legacy-peer-deps --omit=dev && \
-    npm install winston-daily-rotate-file --legacy-peer-deps
+RUN npm install --legacy-peer-deps
 
 COPY api ./api
 COPY config ./config
