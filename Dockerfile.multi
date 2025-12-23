@@ -25,7 +25,7 @@ COPY api/package*.json ./api/
 # Install all dependencies for every build
 FROM base-min AS base
 WORKDIR /app
-RUN npm ci
+RUN npm install --legacy-peer-deps
 
 # Build `data-provider` package
 FROM base AS data-provider-build
@@ -86,7 +86,7 @@ COPY client/package*.json ./client/
 COPY api/package*.json ./api/
 
 # Install only production deps
-RUN npm ci --omit=dev
+RUN npm install --legacy-peer-deps --omit=dev
 
 COPY api ./api
 COPY config ./config
