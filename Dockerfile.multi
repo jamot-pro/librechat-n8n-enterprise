@@ -25,7 +25,8 @@ COPY api/package*.json ./api/
 # Install all dependencies for every build
 FROM base-min AS base
 WORKDIR /app
-RUN npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps && \
+    npm install @rollup/rollup-linux-x64-gnu --save-optional
 
 # Build `data-provider` package
 FROM base AS data-provider-build
