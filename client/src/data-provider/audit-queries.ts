@@ -95,11 +95,12 @@ export const useEditReport = () => {
   return useMutation({
     mutationFn: ({ sessionId, reportData }: { sessionId: string; reportData: EditReportRequest }) =>
       auditApi.editReport(sessionId, reportData),
-    onSuccess: (data, variables) => {
-      // Invalidate audit detail query to refetch updated data
+    onSuccess: (_, variables) => {
+      // Invalidate detail so it refetches in the background (no loading flash
+      // because isLoading is false when cached data already exists)
       queryClient.invalidateQueries({ queryKey: auditKeys.detail(variables.sessionId) });
 
-      // Invalidate all audit lists to show updated data
+      // Invalidate list queries so the list reflects any changes
       queryClient.invalidateQueries({ queryKey: auditKeys.lists() });
     },
     onError: (error) => {

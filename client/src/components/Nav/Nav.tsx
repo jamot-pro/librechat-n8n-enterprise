@@ -17,6 +17,8 @@ import { Conversations } from '~/components/Conversations';
 import SearchBar from './SearchBar';
 import NewChat from './NewChat';
 import SocialDraftsNav from './SocialDraftsNav';
+import TasksNav from './TasksNav';
+import DivineNotifications from '~/components/Divine/DivineNotifications';
 import { cn } from '~/utils';
 import store from '~/store';
 import { useNavigate } from 'react-router-dom';
@@ -225,6 +227,7 @@ const Nav = memo(
                       {import.meta.env.VITE_SOCIAL_MEDIA_AUTOMATION === 'true' && (
                         <SocialDraftsNav />
                       )}
+                      <TasksNav />
                       <Conversations
                         conversations={conversations}
                         moveToTop={moveToTop}
@@ -234,6 +237,9 @@ const Nav = memo(
                         isLoading={isFetchingNextPage || showLoading || isLoading}
                         isSearchLoading={isSearchLoading}
                       />
+                    </div>
+                    <div className="flex items-center justify-end px-2 pb-1 md:px-3">
+                      <DivineNotifications />
                     </div>
                     <Suspense fallback={null}>
                       <AccountSettings />

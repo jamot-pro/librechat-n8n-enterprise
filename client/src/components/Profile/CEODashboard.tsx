@@ -11,6 +11,7 @@ import { useFeatureFlag } from '~/hooks/useFeatureFlag';
 import { FEATURES } from '~/constants/businesses';
 import CEOSignageOrdersWidget from './CEO/CEOSignageOrdersWidget';
 import ConfirmActionModal from './Modals/ConfirmActionModal';
+import DivineActivityLog, { DivineActivityStats } from '~/components/Divine/DivineActivityLog';
 
 // --- TYPES ---
 interface Project {
@@ -91,7 +92,7 @@ export default function CEODashboard({ profile }: { profile: any }) {
   // Tab state
   const [activeTab, setActiveTab] = useState<
     
-    'overview' | 'projects' | 'tasks' | 'tickets' | 'orders' | 'analytics' | 'users' | 'audit'
+    'overview' | 'projects' | 'tasks' | 'tickets' | 'orders' | 'analytics' | 'users' | 'audit' | 'divine'
   
   >('overview');
 
@@ -896,6 +897,7 @@ export default function CEODashboard({ profile }: { profile: any }) {
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'users', label: 'Users', icon: '👥', count: users.length },
     ...(isAuditEnabled ? [{ id: 'audit', label: 'Audit', icon: '🔍' }] : []),
+    { id: 'divine', label: 'Divine Activity', icon: '✦' },
   ];
 
   return (
@@ -967,6 +969,7 @@ export default function CEODashboard({ profile }: { profile: any }) {
               <CEOProjectsTable projects={projects} />
             </div>
             <div className="space-y-6">
+              <DivineActivityStats />
               <CEOSignageOrdersWidget
                 stats={signageOrdersStats}
                 onViewAll={() => setActiveTab('orders')}
@@ -1412,6 +1415,13 @@ export default function CEODashboard({ profile }: { profile: any }) {
       {activeTab === 'audit' && isAuditEnabled && (
         <div className="space-y-4">
           <AuditManagementPage />
+        </div>
+      )}
+
+      {activeTab === 'divine' && (
+        <div className="space-y-6">
+          <DivineActivityStats />
+          <DivineActivityLog />
         </div>
       )}
 

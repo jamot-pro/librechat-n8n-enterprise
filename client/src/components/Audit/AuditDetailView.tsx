@@ -67,7 +67,7 @@ export const AuditDetailView: React.FC<AuditDetailViewProps> = ({ sessionId, onB
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  const { data: audit, isLoading, error, refetch } = useAuditDetails(sessionId);
+  const { data: audit, isLoading, error } = useAuditDetails(sessionId);
 
   if (isLoading) {
     return (
@@ -613,9 +613,6 @@ export const AuditDetailView: React.FC<AuditDetailViewProps> = ({ sessionId, onB
           userName={user?.name}
           isOpen={showApprovalModal}
           onClose={() => setShowApprovalModal(false)}
-          onSuccess={() => {
-            refetch();
-          }}
         />
       )}
 
@@ -626,9 +623,6 @@ export const AuditDetailView: React.FC<AuditDetailViewProps> = ({ sessionId, onB
           report={report}
           isOpen={showEditModal}
           onClose={() => setShowEditModal(false)}
-          onSuccess={() => {
-            refetch();
-          }}
         />
       )}
     </div>

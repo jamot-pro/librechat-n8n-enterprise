@@ -139,6 +139,11 @@ router.post('/', validateWebhookSecret, async (req, res) => {
       status: 'pending',
     });
 
+    try {
+      const { platformEvents } = require('../services/divine/autonomous/worker');
+      platformEvents.emit('social:draftCreated', doc);
+    } catch (_) { /* worker not yet initialised — safe to ignore */ }
+
     res.status(201).json({
       success: true,
       draftId: doc._id.toString(),

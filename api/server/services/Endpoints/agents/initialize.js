@@ -54,6 +54,9 @@ function createToolLoader(signal) {
         tool_resources,
       });
 
+      // Normalise: ensure result is always an object so injections can safely merge into it
+      let mergedResult = result ?? { tools: [], toolContextMap: {} };
+
       // === INJECT N8N STRUCTURED TOOLS ===
       // Load n8n workflows as executable LangChain StructuredTool instances
       if (req.user) {
@@ -65,18 +68,10 @@ function createToolLoader(signal) {
           const n8nTools = await loadN8nStructuredTools(req.user);
 
           if (n8nTools && n8nTools.length > 0) {
-            if (!result) {
-              return {
-                tools: n8nTools,
-                toolContextMap: {},
-              };
-            }
-
-            // Merge n8n tools with existing agent tools
-            result.tools = [...(result.tools || []), ...n8nTools];
+            mergedResult.tools = [...(mergedResult.tools || []), ...n8nTools];
 
             logger.info(`[Agents Initialize] ✅ Injected ${n8nTools.length} n8n StructuredTools`, {
-              totalTools: result.tools.length,
+              totalTools: mergedResult.tools.length,
               n8nToolNames: n8nTools.map((t) => t.name),
             });
           }
@@ -85,7 +80,42 @@ function createToolLoader(signal) {
         }
       }
 
-      return result;
+      // === INJECT DIVINE TOOLS ===
+      // For the Divine Intelligence agent, inject role-aware task/user tools
+      // and override the system prompt via toolContextMap (prepended to instructions at runtime)
+      try {
+        const { DIVINE_AGENT_ID } = require('~/server/services/divine/seedAgent');
+        if (agentId === DIVINE_AGENT_ID && req.user) {
+          const { getToolsForUser } = require('~/server/services/divine/tools');
+          const { getSystemPrompt } = require('~/server/services/divine/prompts');
+          const Profile = require('~/server/models/Profile');
+
+          const profile = await Profile.findOne({ userId: req.user._id }).lean();
+          const profileType = profile?.profileType || 'employee';
+
+          const divineTools = getToolsForUser(req.user.id, profileType);
+          if (divineTools.length > 0) {
+            mergedResult.tools = [...(mergedResult.tools || []), ...divineTools];
+          }
+
+          // Inject role-specific system prompt at runtime via toolContextMap
+          // (toolContextMap values are prepended to the system prompt by createRun)
+          if (!mergedResult.toolContextMap) {
+            mergedResult.toolContextMap = {};
+          }
+          mergedResult.toolContextMap['divine_system'] = getSystemPrompt(profileType);
+
+          logger.info(
+            `[Agents Initialize] ✅ Injected ${divineTools.length} Divine tools + system prompt for ${profileType}`,
+            { toolNames: divineTools.map((t) => t.name) },
+          );
+        }
+      } catch (error) {
+        logger.error('[Agents Initialize] Error loading Divine tools:', error);
+      }
+
+      // Only return a non-null result if there are actually tools (or if loadAgentTools had a result)
+      return result != null || mergedResult.tools.length > 0 ? mergedResult : result;
     } catch (error) {
       logger.error('Error loading tools for agent ' + agentId, error);
     }

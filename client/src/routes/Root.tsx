@@ -23,6 +23,7 @@ import { Banner } from '~/components/Banners';
 import { PDFBuilderModal } from '~/components/PDFBuilder';
 import { ProfileDashboardModal } from '~/components/Profile/ProfileDashboardModal';
 import { SocialDraftModal } from '~/components/SocialDraft';
+import DivineSidebar from '~/components/Divine/DivineSidebar';
 
 export default function Root() {
   const [showTerms, setShowTerms] = useState(false);
@@ -101,6 +102,8 @@ export default function Root() {
           <ProfileDashboardModal />
           {/* Start Social Draft Modal (only when VITE_SOCIAL_MEDIA_AUTOMATION=true) */}
           {import.meta.env.VITE_SOCIAL_MEDIA_AUTOMATION === 'true' && <SocialDraftModal />}
+          {/* Divine Intelligence floating sidebar */}
+          <DivineSidebar />
         </AssistantsMapContext.Provider>
       </FileMapContext.Provider>
     </SetConvoProvider>

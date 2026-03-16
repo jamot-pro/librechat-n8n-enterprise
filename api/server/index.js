@@ -86,6 +86,24 @@ const startServer = async () => {
   app.set('trust proxy', trusted_proxy);
 
   await seedDatabase();
+
+  // Seed Divine Intelligence agent
+  try {
+    const { seedDivineAgent } = require('./services/divine/seedAgent');
+    await seedDivineAgent();
+    console.log('[OK] Divine Intelligence agent seeded');
+  } catch (e) {
+    console.warn('[SKIP] Divine agent seed (error):', e.message);
+  }
+
+  // Start Divine autonomous engine (cron + event-driven worker)
+  try {
+    const { initAutonomousWorker } = require('./services/divine/autonomous/worker');
+    initAutonomousWorker();
+  } catch (e) {
+    console.warn('[SKIP] Divine autonomous worker (error):', e.message);
+  }
+
   const appConfig = await getAppConfig();
   if (initializeFileStorage) initializeFileStorage(appConfig);
   if (performStartupChecks) await performStartupChecks(appConfig);
@@ -356,6 +374,26 @@ const startServer = async () => {
   } catch (e) {
     console.log('[SKIP] Signage orders routes (error loading)');
     console.error('[ERROR] Signage orders routes error:', e.message);
+  }
+
+  // Task Management Routes
+  try {
+    const taskRoutes = require('./routes/tasks');
+    app.use('/api/tasks', taskRoutes);
+    console.log('[OK] Task management routes loaded');
+  } catch (e) {
+    console.log('[SKIP] Task routes (error loading)');
+    console.error('[ERROR] Task routes error:', e.message);
+  }
+
+  // Divine Intelligence Routes
+  try {
+    const divineRoutes = require('./routes/divine');
+    app.use('/api/divine', divineRoutes);
+    console.log('[OK] Divine Intelligence routes loaded');
+  } catch (e) {
+    console.log('[SKIP] Divine routes (error loading)');
+    console.error('[ERROR] Divine routes error:', e.message);
   }
 
   // LinkedIn Direct API Integration
