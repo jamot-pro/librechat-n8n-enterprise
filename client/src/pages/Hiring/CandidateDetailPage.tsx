@@ -6,7 +6,7 @@ import { useHiringCandidate } from '~/hooks/useHiringCandidate';
 export default function CandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { candidate, loading, update } = useHiringCandidate(id);
+  const { candidate, loading, update, remove } = useHiringCandidate(id);
 
   if (loading) {
     return (
@@ -29,6 +29,7 @@ export default function CandidateDetailPage() {
       candidate={candidate}
       onBack={() => navigate('/hiring/team')}
       onUpdate={update}
+      onDelete={async () => { await remove(); navigate('/hiring/team'); }}
     />
   );
 }

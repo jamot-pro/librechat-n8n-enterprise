@@ -72,5 +72,22 @@ export function useHiringCandidates() {
     [token, showToast],
   );
 
-  return { candidates, loading, addCandidate, updateCandidate, refetch };
+  const deleteCandidate = useCallback(
+    async (id: string): Promise<void> => {
+      const res = await fetch(`/api/hiring/candidates/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        showToast({ message: data.error || 'Failed to delete candidate', status: 'error' });
+        throw new Error(data.error);
+      }
+      setCandidates((prev) => prev.filter((c) => c._id !== id));
+    },
+    [token, showToast],
+  );
+
+  return { candidates, loading, addCandidate, updateCandidate, deleteCandidate, refetch };
 }

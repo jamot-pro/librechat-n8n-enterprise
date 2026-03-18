@@ -56,7 +56,8 @@ class OnboardingAgent {
     try {
       await whatsapp.sendMessage(candidate.whatsapp, FIELD_PROMPTS[field]);
     } catch (err) {
-      logger.error(`[OnboardingAgent] Failed to send question to ${candidateId}:`, err.message);
+      const detail = err?.response?.data ? JSON.stringify(err.response.data) : err?.message ?? String(err);
+      logger.error(`[OnboardingAgent] Failed to send question to ${candidateId}: ${detail}`);
       await Candidate.findByIdAndUpdate(candidateId, { status: 'pending' });
     }
   }
@@ -64,10 +65,17 @@ class OnboardingAgent {
   /**
    * Store a collected response and advance the conversation step.
    * @param {string} candidateId
-   * @param {string} field - Key from ONBOARDING_FIELDS
    * @param {string} value - Collected value
    */
-  async processResponse(candidateId, field, value) {
+  async processResponse(candidateId, value) {
+    const candidate = await Candidate.findById(candidateId);
+    if (!candidate) return;
+
+    const field = ONBOARDING_FIELDS[candidate.onboardingStep];
+    if (!field) return;
+
+    logger.info(`[OnboardingAgent] Saving field "${field}" for candidate ${candidateId}`);
+
     // Write directly to the candidate field (not nested in onboardingData)
     await Candidate.findByIdAndUpdate(candidateId, {
       [field]: value,
