@@ -55,11 +55,19 @@ router.post('/whatsapp/webhook', async (req, res) => {
           const text = message.text?.body?.trim();
           if (!text) continue;
 
-          // Find candidate by WhatsApp number
-          const candidate = await Candidate.findOne({ whatsapp: from, status: 'onboarding' });
+          // Find candidate by WhatsApp number (any active onboarding status)
+          const candidate = await Candidate.findOne({
+            whatsapp: from,
+            status: { $in: ['onboarding', 'pending'] },
+          });
           if (!candidate) {
             logger.warn(`[WhatsApp] Received message from unknown/inactive number: ${from}`);
             continue;
+          }
+
+          // If stuck in pending, resume onboarding
+          if (candidate.status === 'pending' && candidate.onboardingStep > 0) {
+            await Candidate.findByIdAndUpdate(candidate._id, { status: 'onboarding' });
           }
 
           logger.info(`[WhatsApp] Processing response from ${from} at step: ${candidate.onboardingStep}`);
