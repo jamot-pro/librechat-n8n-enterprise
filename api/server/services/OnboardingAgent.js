@@ -30,6 +30,9 @@ class OnboardingAgent {
     const greeting = `Hi ${candidate.name}! Welcome to the onboarding process. I'll be guiding you through a few quick questions to get you set up. Let's start: ${FIELD_PROMPTS[ONBOARDING_FIELDS[0]]}`;
 
     try {
+      // Send hello_world template first to open the conversation window
+      await whatsapp.sendTemplateGreeting(candidate.whatsapp);
+      // Then send the actual greeting as a free-form text
       await whatsapp.sendMessage(candidate.whatsapp, greeting);
       await Candidate.findByIdAndUpdate(candidate._id, { status: 'onboarding', onboardingStep: 0 });
       logger.info(`[OnboardingAgent] Initiated conversation for candidate ${candidate._id}`);
