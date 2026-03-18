@@ -45,6 +45,39 @@ class WhatsAppIntegration {
       },
     );
   }
+
+  /**
+   * Send the hello_world template to open a conversation.
+   * Required for the first outbound message to a user who hasn't messaged us first.
+   * @param {string} to - Recipient phone number in international format
+   */
+  async sendTemplateGreeting(to) {
+    if (!this.enabled) {
+      logger.warn('[WhatsApp] Skipping sendTemplateGreeting — integration disabled.');
+      return;
+    }
+
+    const url = `https://graph.facebook.com/v18.0/${this.phoneNumberId}/messages`;
+
+    await axios.post(
+      url,
+      {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'template',
+        template: {
+          name: 'hello_world',
+          language: { code: 'en_US' },
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${this.apiToken}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+  }
 }
 
 module.exports = new WhatsAppIntegration();
