@@ -11,6 +11,8 @@ class WhatsAppIntegration {
       logger.warn(
         '[WhatsApp] WHATSAPP_API_TOKEN or WHATSAPP_PHONE_NUMBER_ID not set. WhatsApp sending disabled.',
       );
+    } else {
+      logger.info(`[WhatsApp] Initialized — phoneNumberId=${this.phoneNumberId} tokenPrefix=${this.apiToken.slice(0, 10)}...`);
     }
   }
 
