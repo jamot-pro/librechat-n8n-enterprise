@@ -55,5 +55,19 @@ export function useHiringCandidate(id: string | undefined) {
     [token, id, showToast],
   );
 
-  return { candidate, loading, update, refetch };
+  const remove = useCallback(async (): Promise<void> => {
+    if (!token || !id) return;
+    const res = await fetch(`/api/hiring/candidates/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      showToast({ message: data.error || 'Failed to delete candidate', status: 'error' });
+      throw new Error(data.error);
+    }
+  }, [token, id, showToast]);
+
+  return { candidate, loading, update, remove, refetch };
 }

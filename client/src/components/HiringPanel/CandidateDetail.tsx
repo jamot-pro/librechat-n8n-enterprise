@@ -8,6 +8,7 @@ import {
   X,
   Upload,
   ArrowLeft,
+  Trash2,
 } from 'lucide-react';
 import type { Candidate, OnboardingStatus } from './types';
 
@@ -162,9 +163,10 @@ interface CandidateDetailProps {
   candidate: Candidate;
   onBack: () => void;
   onUpdate: (patch: Partial<Candidate>) => Promise<Candidate | null>;
+  onDelete?: (id: string) => Promise<void>;
 }
 
-export default function CandidateDetail({ candidate, onBack, onUpdate }: CandidateDetailProps) {
+export default function CandidateDetail({ candidate, onBack, onUpdate, onDelete }: CandidateDetailProps) {
   const [statusOpen, setStatusOpen] = useState(false);
 
   // Per-section draft state
@@ -261,6 +263,20 @@ export default function CandidateDetail({ candidate, onBack, onUpdate }: Candida
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
+        {onDelete && (
+          <button
+            onClick={async () => {
+              if (window.confirm(`Delete ${candidate.name}? This cannot be undone.`)) {
+                await onDelete(candidate._id);
+                onBack();
+              }
+            }}
+            className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </button>
+        )}
       </div>
 
       {/* Profile header */}

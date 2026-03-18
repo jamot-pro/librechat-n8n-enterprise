@@ -62,11 +62,8 @@ router.post('/whatsapp/webhook', async (req, res) => {
             continue;
           }
 
-          const field = ['fullLegalName', 'dateOfBirth', 'address', 'emergencyContact', 'roleStartDate'][candidate.onboardingStep];
-          if (!field) continue;
-
-          logger.info(`[WhatsApp] Processing response from ${from} for field: ${field}`);
-          await onboardingAgent.processResponse(candidate._id.toString(), field, text);
+          logger.info(`[WhatsApp] Processing response from ${from} at step: ${candidate.onboardingStep}`);
+          await onboardingAgent.processResponse(candidate._id.toString(), text);
         }
       }
     }
@@ -132,6 +129,23 @@ router.get('/candidates/:id', requireJwtAuth, async (req, res) => {
   } catch (err) {
     logger.error('[hiring] GET /candidates/:id error:', err.message);
     return res.status(500).json({ error: 'Failed to fetch candidate' });
+  }
+});
+
+/**
+ * DELETE /api/hiring/candidates/:id
+ * Delete a candidate.
+ */
+router.delete('/candidates/:id', requireJwtAuth, async (req, res) => {
+  try {
+    const candidate = await Candidate.findByIdAndDelete(req.params.id);
+    if (!candidate) {
+      return res.status(404).json({ error: 'Candidate not found' });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    logger.error('[hiring] DELETE /candidates/:id error:', err.message);
+    return res.status(500).json({ error: 'Failed to delete candidate' });
   }
 });
 
