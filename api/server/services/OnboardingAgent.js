@@ -34,7 +34,8 @@ class OnboardingAgent {
       await Candidate.findByIdAndUpdate(candidate._id, { status: 'onboarding', onboardingStep: 0 });
       logger.info(`[OnboardingAgent] Initiated conversation for candidate ${candidate._id}`);
     } catch (err) {
-      logger.error(`[OnboardingAgent] Failed to initiate conversation for ${candidate._id}:`, err.message);
+      const detail = err?.response?.data ? JSON.stringify(err.response.data) : err?.message ?? String(err);
+      logger.error(`[OnboardingAgent] Failed to initiate conversation for ${candidate._id}: ${detail}`);
       await Candidate.findByIdAndUpdate(candidate._id, { status: 'pending' });
     }
   }
