@@ -72,5 +72,43 @@ export function useHiringTasks() {
     [token, showToast],
   );
 
-  return { tasks, loading, createTask, updateTask, refetch };
+  const deleteTask = useCallback(
+    async (id: string) => {
+      const res = await fetch(`/api/hiring/tasks/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        showToast({ message: data.error || 'Failed to delete task', status: 'error' });
+        return;
+      }
+      setTasks((prev) => prev.filter((t) => t._id !== id));
+    },
+    [token, showToast],
+  );
+
+  const uploadTaskImage = useCallback(
+    async (taskId: string, file: File): Promise<Task> => {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`/api/hiring/tasks/${taskId}/image`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast({ message: data.error || 'Failed to upload image', status: 'error' });
+        throw new Error(data.error || 'Upload failed');
+      }
+      setTasks((prev) => prev.map((t) => (t._id === taskId ? data : t)));
+      return data;
+    },
+    [token, showToast],
+  );
+
+  return { tasks, loading, createTask, updateTask, deleteTask, uploadTaskImage, refetch };
 }
