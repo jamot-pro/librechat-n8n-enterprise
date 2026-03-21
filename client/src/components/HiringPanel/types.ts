@@ -41,11 +41,32 @@ export interface Candidate {
   updatedAt: string;
 }
 
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface ChecklistItem {
+  _id?: string;
+  text: string;
+  done: boolean;
+}
+
+/** Image uploaded via hiring task image endpoint (S3/local filepath + File record). */
+export interface TaskAttachment {
+  fileId: string;
+  url: string;
+  filename: string;
+}
+
 export interface Task {
   _id: string;
   title: string;
   description: string;
   status: TaskStatus;
+  priority?: TaskPriority;
+  labels?: string[];
+  dueDate?: string;
+  assignee?: string;
+  checklist?: ChecklistItem[];
+  attachments?: TaskAttachment[];
   createdAt: string;
   updatedAt: string;
 }
@@ -59,4 +80,12 @@ export interface AddCandidateInput {
 export interface CreateTaskInput {
   title: string;
   description?: string;
+}
+
+/** User option for hiring task assignee dropdown (from GET /api/hiring/assignable-users). */
+export interface AssignableUser {
+  id: string;
+  email: string;
+  name: string;
+  label: string;
 }

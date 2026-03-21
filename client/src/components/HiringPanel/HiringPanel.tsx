@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useHiringCandidates } from '~/hooks/useHiringCandidates';
 import { useHiringTasks } from '~/hooks/useHiringTasks';
+import { useHiringColumns } from '~/hooks/useHiringColumns';
+import { useHiringAssignableUsers } from '~/hooks/useHiringAssignableUsers';
 import TeamManagementView from './TeamManagementView';
 import TaskBoard from './TaskBoard';
 
@@ -19,7 +21,16 @@ export default function HiringPanel() {
   });
 
   const { candidates, loading: candidatesLoading, addCandidate } = useHiringCandidates();
-  const { tasks, loading: tasksLoading, createTask, updateTask } = useHiringTasks();
+  const { tasks, loading: tasksLoading, createTask, updateTask, deleteTask, uploadTaskImage } =
+    useHiringTasks();
+  const {
+    columns,
+    loading: columnsLoading,
+    createColumn,
+    updateColumn,
+    deleteColumn,
+  } = useHiringColumns();
+  const { assignableUsers } = useHiringAssignableUsers();
 
   useEffect(() => {
     try {
@@ -41,9 +52,16 @@ export default function HiringPanel() {
       ) : (
         <TaskBoard
           tasks={tasks}
-          loading={tasksLoading}
+          loading={tasksLoading || columnsLoading}
+          columns={columns}
           onCreateTask={createTask}
           onUpdateTask={updateTask}
+          onDeleteTask={deleteTask}
+          onCreateColumn={createColumn}
+          onUpdateColumn={(id, label) => updateColumn(id, { label })}
+          onDeleteColumn={deleteColumn}
+          onUploadTaskImage={uploadTaskImage}
+          assignableUsers={assignableUsers}
           onSwitchToTeam={() => setActiveTab('team')}
         />
       )}
