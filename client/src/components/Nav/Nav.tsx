@@ -16,9 +16,12 @@ import { useConversationsInfiniteQuery } from '~/data-provider';
 import { Conversations } from '~/components/Conversations';
 import SearchBar from './SearchBar';
 import NewChat from './NewChat';
+<<<<<<< HEAD
 import SocialDraftsNav from './SocialDraftsNav';
 import TasksNav from './TasksNav';
 import DivineNotifications from '~/components/Divine/DivineNotifications';
+=======
+>>>>>>> 412a7b8c77400dfc10e62d1cbafea7ae9b6827ec
 import { cn } from '~/utils';
 import store from '~/store';
 import { useNavigate } from 'react-router-dom';
@@ -224,10 +227,13 @@ const Nav = memo(
                         headerButtons={headerButtons}
                         isSmallScreen={isSmallScreen}
                       />
+<<<<<<< HEAD
                       {import.meta.env.VITE_SOCIAL_MEDIA_AUTOMATION === 'true' && (
                         <SocialDraftsNav />
                       )}
                       <TasksNav />
+=======
+>>>>>>> 412a7b8c77400dfc10e62d1cbafea7ae9b6827ec
                       <Conversations
                         conversations={conversations}
                         moveToTop={moveToTop}

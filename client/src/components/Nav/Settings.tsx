@@ -57,7 +57,9 @@ export default function Settings({ open, onOpenChange }: TDialogProps) {
       ...(hasAnyPersonalizationFeature ? [SettingsTabValues.PERSONALIZATION] : []),
       SettingsTabValues.DATA,
       ...(startupConfig?.balance?.enabled ? [SettingsTabValues.BALANCE] : []),
-      ...(import.meta.env.VITE_SOCIAL_MEDIA_AUTOMATION === 'true' ? [SettingsTabValues.SOCIAL_ACCOUNTS] : []),
+      ...(import.meta.env.VITE_SOCIAL_MEDIA_AUTOMATION === 'true'
+        ? [SettingsTabValues.SOCIAL_ACCOUNTS]
+        : []),
       SettingsTabValues.ACCOUNT,
     ];
     const currentIndex = tabs.indexOf(activeTab);
