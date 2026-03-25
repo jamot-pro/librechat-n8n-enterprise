@@ -1,5 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import MDEditor from '@uiw/react-md-editor';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
+
+const MDEditor = lazy(() => import('@uiw/react-md-editor'));
+// Lazy-load the markdown preview separately to avoid circular chunk init errors
+const MDPreview = lazy(() =>
+  import('@uiw/react-markdown-preview').then((m) => ({ default: m.default })),
+);
 import {
   Plus,
   Edit3,
@@ -182,13 +187,15 @@ function PromptForm({ initial, categories, onClose }: PromptFormProps) {
             Prompt Content (Markdown)
           </label>
           <div data-color-mode="auto">
-            <MDEditor
-              value={content}
-              onChange={(val) => setContent(val || '')}
-              height={400}
-              style={{ minHeight: '300px' }}
-              preview="live"
-            />
+            <Suspense fallback={<div className="h-64 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-700" />}>
+              <MDEditor
+                value={content}
+                onChange={(val) => setContent(val || '')}
+                height={400}
+                style={{ minHeight: '300px' }}
+                preview="live"
+              />
+            </Suspense>
           </div>
         </div>
 
@@ -357,7 +364,9 @@ function PromptCard({
       {expanded && (
         <div className="border-t border-gray-100 px-4 py-3 dark:border-gray-700">
           <div data-color-mode="auto">
-            <MDEditor.Markdown source={prompt.content} style={{ background: 'transparent' }} />
+            <Suspense fallback={<div className="h-16 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />}>
+              <MDPreview source={prompt.content} style={{ background: 'transparent' }} />
+            </Suspense>
           </div>
         </div>
       )}

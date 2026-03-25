@@ -164,13 +164,12 @@ export default defineConfig(({ command }) => ({
             if (
               normalizedId.includes('react-markdown') ||
               normalizedId.includes('remark-') ||
-              normalizedId.includes('rehype-') ||
-              normalizedId.includes('@uiw/react-md-editor') ||
-              normalizedId.includes('@uiw/react-markdown-preview') ||
-              normalizedId.includes('@uiw/codemirror-extensions-basic-setup')
+              normalizedId.includes('rehype-')
             ) {
               return 'markdown-processing';
             }
+            // @uiw packages are lazy-loaded in the app — let Rollup assign them
+            // to their own async chunk to avoid React-undefined ordering issues.
             if (normalizedId.includes('monaco-editor') || normalizedId.includes('@monaco-editor')) {
               return 'code-editor';
             }
