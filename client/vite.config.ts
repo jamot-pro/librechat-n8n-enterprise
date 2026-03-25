@@ -255,6 +255,15 @@ export default defineConfig(({ command }) => ({
     },
     chunkSizeWarningLimit: 1500,
   },
+  optimizeDeps: {
+    include: [
+      '@uiw/react-md-editor',
+      '@uiw/react-markdown-preview',
+      '@uiw/codemirror-extensions-basic-setup',
+      '@codemirror/state',
+      '@codemirror/view',
+    ],
+  },
   resolve: {
     alias: {
       '~': path.join(__dirname, 'src/'),
