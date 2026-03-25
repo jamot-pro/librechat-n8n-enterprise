@@ -109,6 +109,7 @@ export default defineConfig(({ command }) => ({
     rollupOptions: {
       preserveEntrySignatures: 'strict',
       output: {
+        generatedCode: { constBindings: false },
         manualChunks(id: string) {
           const normalizedId = id.replace(/\\/g, '/');
           if (normalizedId.includes('node_modules')) {
@@ -257,15 +258,6 @@ export default defineConfig(({ command }) => ({
       },
     },
     chunkSizeWarningLimit: 1500,
-  },
-  optimizeDeps: {
-    include: [
-      '@uiw/react-md-editor',
-      '@uiw/react-markdown-preview',
-      '@uiw/codemirror-extensions-basic-setup',
-      '@codemirror/state',
-      '@codemirror/view',
-    ],
   },
   resolve: {
     alias: {
