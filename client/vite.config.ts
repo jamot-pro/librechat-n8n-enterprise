@@ -56,7 +56,7 @@ export default defineConfig(({ command }) => ({
           'manifest.webmanifest',
         ],
         globIgnores: ['images/**/*', '**/*.map', 'index.html'],
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         navigateFallbackDenylist: [/^\/oauth/, /^\/api/],
       },
       includeAssets: [],
@@ -161,15 +161,8 @@ export default defineConfig(({ command }) => ({
               return 'codemirror-core';
             }
 
-            if (
-              normalizedId.includes('react-markdown') ||
-              normalizedId.includes('remark-') ||
-              normalizedId.includes('rehype-')
-            ) {
-              return 'markdown-processing';
-            }
-            // @uiw packages are lazy-loaded in the app — let Rollup assign them
-            // to their own async chunk to avoid React-undefined ordering issues.
+            // remark/rehype/react-markdown intentionally NOT chunked here —
+            // manual chunking causes React-undefined ordering errors at runtime.
             if (normalizedId.includes('monaco-editor') || normalizedId.includes('@monaco-editor')) {
               return 'code-editor';
             }
