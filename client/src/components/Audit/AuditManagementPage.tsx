@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { ClipboardCheck, Users, Activity } from 'lucide-react';
+import { ClipboardCheck, Users, Activity, FileText } from 'lucide-react';
 import { useAuditHealth, useUserList } from '~/data-provider/audit-queries';
 import { AuditListView } from './AuditListView';
 import { AuditDetailView } from './AuditDetailView';
+import AuditPromptsTab from './AuditPromptsTab';
 
 /**
  * Main Audit Management Page
  * Container for audit management with tabs (standalone mode for CEO Dashboard)
  */
 export const AuditManagementPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'audits' | 'users' | 'health'>('audits');
+  const [activeTab, setActiveTab] = useState<'audits' | 'users' | 'health' | 'prompts'>('audits');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const { data: health } = useAuditHealth();
   const { data: usersData } = useUserList();
@@ -36,6 +37,11 @@ export const AuditManagementPage: React.FC = () => {
       id: 'health' as const,
       label: 'Health',
       icon: Activity,
+    },
+    {
+      id: 'prompts' as const,
+      label: 'Prompts',
+      icon: FileText,
     },
   ];
 
@@ -189,6 +195,8 @@ export const AuditManagementPage: React.FC = () => {
             )}
           </div>
         )}
+
+        {activeTab === 'prompts' && <AuditPromptsTab />}
       </div>
     </div>
   );

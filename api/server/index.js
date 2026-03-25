@@ -337,6 +337,11 @@ const startServer = async () => {
       );
 
       console.log(`[OK] Audit admin routes loaded for ${FeatureService.getBusinessName()}`);
+
+      // Audit Prompts — public API (ADMIN_API_SECRET) + CEO admin routes
+      const auditPromptsRoutes = require('./routes/auditPrompts');
+      app.use('/api/audit-prompts', auditPromptsRoutes);
+      console.log('[OK] Audit prompts routes loaded');
     } else {
       console.log(
         `[SKIP] Audit admin routes (feature disabled for ${FeatureService.getBusinessName()})`,

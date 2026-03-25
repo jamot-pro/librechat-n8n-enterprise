@@ -14,6 +14,14 @@ import {
   Calendar as CalendarIcon,
   DollarSign,
   History,
+  MessageSquare,
+  Bot,
+  Mic,
+  ChevronDown,
+  ChevronRight,
+  Volume2,
+  Download,
+  MicOff,
 } from 'lucide-react';
 import { useAuditDetails } from '~/data-provider/audit-queries';
 import { ApprovalModal } from './ApprovalModal';
@@ -57,6 +65,148 @@ const getSeverityColor = (severity: string) => {
   };
   return colors[severity?.toLowerCase()] ?? colors.medium;
 };
+
+// ─── Audio Recording ─────────────────────────────────────────────────────────
+
+function AudioSection({ audioUrl }: { audioUrl: string | null | undefined }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+      <div className="mb-4 flex items-center space-x-2">
+        <Volume2 className="h-5 w-5 text-indigo-500" />
+        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Session Recording</h2>
+      </div>
+
+      {audioUrl ? (
+        <div className="space-y-3">
+          <audio
+            controls
+            src={audioUrl}
+            className="w-full rounded-lg"
+            preload="metadata"
+          >
+            Your browser does not support the audio element.
+          </audio>
+          <div className="flex justify-end">
+            <a
+              href={audioUrl}
+              download
+              className="flex items-center space-x-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              <Download className="h-4 w-4" />
+              <span>Download Recording</span>
+            </a>
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500">
+            Recording link expires after 1 hour. Refresh the page if playback fails.
+          </p>
+        </div>
+      ) : (
+        <div className="flex items-center space-x-3 rounded-lg bg-gray-50 p-4 dark:bg-gray-700/40">
+          <MicOff className="h-5 w-5 text-gray-400" />
+          <p className="text-sm text-gray-500 dark:text-gray-400">No recording available for this session.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Transcript ──────────────────────────────────────────────────────────────
+
+interface TranscriptMessage {
+  role: string;
+  message: string;
+  time_in_call_secs?: number;
+  source_medium?: string;
+  interrupted?: boolean;
+}
+
+function formatCallTime(secs: number | undefined): string {
+  if (secs == null) return '';
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function TranscriptSection({ transcript }: { transcript: TranscriptMessage[] }) {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between px-6 py-4"
+      >
+        <div className="flex items-center space-x-2">
+          <MessageSquare className="h-5 w-5 text-indigo-500" />
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+            Transcript
+          </h2>
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+            {transcript.length} messages
+          </span>
+        </div>
+        {expanded ? (
+          <ChevronDown className="h-5 w-5 text-gray-400" />
+        ) : (
+          <ChevronRight className="h-5 w-5 text-gray-400" />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="border-t border-gray-100 px-6 py-4 dark:border-gray-700">
+          <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+            {transcript.map((msg, i) => {
+              const isAgent = msg.role === 'agent' || msg.role === 'assistant';
+              return (
+                <div
+                  key={i}
+                  className={`flex gap-3 ${isAgent ? '' : 'flex-row-reverse'}`}
+                >
+                  {/* Avatar */}
+                  <div
+                    className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                      isAgent
+                        ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
+                        : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
+                    }`}
+                  >
+                    {isAgent ? <Bot className="h-4 w-4" /> : <Mic className="h-3.5 w-3.5" />}
+                  </div>
+
+                  {/* Bubble */}
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                      isAgent
+                        ? 'rounded-tl-sm bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'
+                        : 'rounded-tr-sm bg-indigo-600 text-white'
+                    }`}
+                  >
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                    <div
+                      className={`mt-1 flex items-center gap-2 text-xs ${
+                        isAgent ? 'text-gray-400 dark:text-gray-500' : 'text-indigo-200'
+                      }`}
+                    >
+                      {msg.time_in_call_secs != null && (
+                        <span>{formatCallTime(msg.time_in_call_secs)}</span>
+                      )}
+                      {msg.source_medium && <span>{msg.source_medium}</span>}
+                      {msg.interrupted && (
+                        <span className="text-orange-400">interrupted</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Detail View ─────────────────────────────────────────────────────────────
 
 interface AuditDetailViewProps {
   sessionId: string;
@@ -208,6 +358,14 @@ export const AuditDetailView: React.FC<AuditDetailViewProps> = ({ sessionId, onB
             </div>
           </div>
         </div>
+
+        {/* Audio Recording */}
+        <AudioSection audioUrl={session.audioUrl} />
+
+        {/* Transcript */}
+        {session.transcript && session.transcript.length > 0 && (
+          <TranscriptSection transcript={session.transcript} />
+        )}
 
         {/* Report Content */}
         {report ? (
