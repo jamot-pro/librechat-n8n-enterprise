@@ -18,6 +18,7 @@ import RouteErrorBoundary from './RouteErrorBoundary';
 import StartupLayout from './Layouts/Startup';
 import LoginLayout from './Layouts/Login';
 import dashboardRoutes from './Dashboard';
+import jamotDashboardRoutes from './DashboardRoutes';
 import hiringRoutes from './Hiring';
 import ShareRoute from './ShareRoute';
 import ProfileRoute from './ProfileRoute';
@@ -100,6 +101,7 @@ export const router = createBrowserRouter(
           ],
         },
         dashboardRoutes,
+        jamotDashboardRoutes,
         hiringRoutes,
         {
           path: '/',

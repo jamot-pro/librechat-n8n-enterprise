@@ -95,8 +95,8 @@ const SidePanel = ({
   }, [setPDFBuilderState]);
 
   const openDashboard = useCallback(() => {
-    setProfileDashboardState({ isOpen: true });
-  }, [setProfileDashboardState]);
+    navigate('/dashboard');
+  }, [navigate]);
 
   const openSocialDraft = useCallback(() => {
     setSocialDraftState({ isOpen: true });
