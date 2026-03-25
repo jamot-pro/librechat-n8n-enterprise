@@ -163,7 +163,10 @@ export default defineConfig(({ command }) => ({
             if (
               normalizedId.includes('react-markdown') ||
               normalizedId.includes('remark-') ||
-              normalizedId.includes('rehype-')
+              normalizedId.includes('rehype-') ||
+              normalizedId.includes('@uiw/react-md-editor') ||
+              normalizedId.includes('@uiw/react-markdown-preview') ||
+              normalizedId.includes('@uiw/codemirror-extensions-basic-setup')
             ) {
               return 'markdown-processing';
             }
