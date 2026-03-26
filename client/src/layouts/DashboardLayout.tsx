@@ -4,6 +4,7 @@ import { Spinner } from '@librechat/client';
 import useProfile from '~/hooks/useProfile';
 import DashboardSidebar from '~/components/Dashboard/DashboardSidebar';
 import type { ProfileData } from '~/components/Profile';
+import { SocialDraftModal } from '~/components/SocialDraft';
 
 interface DashboardContext {
   profile: ProfileData;
@@ -56,6 +57,7 @@ export default function DashboardLayout() {
       <main className="flex-1 overflow-y-auto">
         <Outlet context={{ profile } satisfies DashboardContext} />
       </main>
+      {import.meta.env.VITE_SOCIAL_MEDIA_AUTOMATION === 'true' && <SocialDraftModal />}
     </div>
   );
 }

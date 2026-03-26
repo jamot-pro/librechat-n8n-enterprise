@@ -107,27 +107,9 @@ export default function useSideNavLinks({
       });
     }
 
-    // Start Social Draft (Command Center)
-    if (openSocialDraft) {
-      links.push({
-        title: 'com_sidepanel_social_draft',
-        label: '',
-        icon: Megaphone,
-        id: 'social-media',
-        Component: SocialMediaPanel,
-      });
-    }
-
-    // Hiring & Onboarding Tool
-    if (openHiringPanel) {
-      links.push({
-        title: 'com_sidepanel_hiring_onboarding',
-        label: '',
-        icon: Users,
-        id: 'hiring-onboarding',
-        onClick: openHiringPanel,
-      });
-    }
+    // Note: Social Draft + Hiring & Onboarding are intentionally NOT mounted here.
+    // They are instead surfaced under the Dashboard sidebar so they live under
+    // the same navigation hierarchy as `/dashboard/*`.
 
     if (
       isAssistantsEndpoint(endpoint) &&

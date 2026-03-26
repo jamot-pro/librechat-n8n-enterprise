@@ -3,23 +3,20 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSetRecoilState } from 'recoil';
 import { useToastContext } from '@librechat/client';
 import { useAuthContext } from '~/hooks';
-import postComposerState from '~/store/postComposer';
 import { socialDraftState } from '~/store/socialDraft';
 import { getDraftPreview, type SocialDraftRecord } from '~/components/SocialDraft/SocialDraftModal';
-import { Trash2, Eye, Plus, Send } from 'lucide-react';
+import { Trash2, Eye, Plus } from 'lucide-react';
 
-type Tab = 'pending' | 'approved';
+type Tab = 'pending';
 
 export default function SocialMediaPanel() {
   const [activeTab, setActiveTab] = useState<Tab>('pending');
   const [pendingDrafts, setPendingDrafts] = useState<SocialDraftRecord[]>([]);
-  const [approvedDrafts, setApprovedDrafts] = useState<SocialDraftRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewingDraftId, setViewingDraftId] = useState<string | null>(null);
   const { token, isAuthenticated } = useAuthContext();
   const { showToast } = useToastContext();
-  const setPostComposerState = useSetRecoilState(postComposerState);
   const setSocialDraftState = useSetRecoilState(socialDraftState);
 
   const PLATFORM_LABELS: Record<string, string> = {
@@ -34,23 +31,14 @@ export default function SocialMediaPanel() {
     if (!token || !isAuthenticated) return;
     setLoading(true);
     try {
-      const [pendingRes, approvedRes] = await Promise.all([
-        fetch('/api/social-drafts?status=pending', {
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: 'include',
-        }),
-        fetch('/api/social-drafts?status=approved', {
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: 'include',
-        }),
-      ]);
+      const pendingRes = await fetch('/api/social-drafts?status=pending', {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+      });
       const pendingData = await pendingRes.json();
-      const approvedData = await approvedRes.json();
       setPendingDrafts(pendingData.success ? pendingData.drafts : []);
-      setApprovedDrafts(approvedData.success ? approvedData.drafts : []);
     } catch {
       setPendingDrafts([]);
-      setApprovedDrafts([]);
     } finally {
       setLoading(false);
     }
@@ -83,22 +71,16 @@ export default function SocialMediaPanel() {
     }
   };
 
-  const handleOpenDraft = (draft: SocialDraftRecord, isApproved: boolean) => {
-    if (isApproved) {
-      const firstDraft = Object.values(draft.drafts).find((text) => text?.trim());
-      if (firstDraft) {
-        setPostComposerState({ isOpen: true, initialContent: firstDraft });
-      }
-    } else {
-      setSocialDraftState({ isOpen: true });
-    }
+  const handleOpenDraft = (_draft: SocialDraftRecord) => {
+    // Approved drafts were moved to `/dashboard/social-drafts` and are not shown here.
+    setSocialDraftState({ isOpen: true });
   };
 
   const handleNewDraft = () => {
     setSocialDraftState({ isOpen: true });
   };
 
-  const drafts = activeTab === 'pending' ? pendingDrafts : approvedDrafts;
+  const drafts = pendingDrafts;
 
   return (
     <div className="flex h-full flex-col">
@@ -132,21 +114,6 @@ export default function SocialMediaPanel() {
             </span>
           )}
         </button>
-        <button
-          onClick={() => setActiveTab('approved')}
-          className={`flex-1 py-2 text-xs font-medium transition-colors ${
-            activeTab === 'approved'
-              ? 'border-b-2 border-green-600 text-green-600'
-              : 'text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          Approved
-          {approvedDrafts.length > 0 && (
-            <span className="ml-1.5 rounded-full bg-green-100 px-1.5 py-0.5 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-400">
-              {approvedDrafts.length}
-            </span>
-          )}
-        </button>
       </div>
 
       {/* Draft List */}
@@ -156,7 +123,7 @@ export default function SocialMediaPanel() {
         ) : drafts.length === 0 ? (
           <div className="py-8 text-center">
             <p className="text-xs text-text-secondary">
-              {activeTab === 'pending' ? 'No pending drafts' : 'No approved drafts'}
+              No pending drafts
             </p>
             {activeTab === 'pending' && (
               <button
@@ -187,16 +154,6 @@ export default function SocialMediaPanel() {
                     >
                       <Eye className="h-3.5 w-3.5" />
                     </button>
-                    {/* Post (approved only) */}
-                    {activeTab === 'approved' && (
-                      <button
-                        onClick={() => handleOpenDraft(draft, true)}
-                        className="rounded p-1 text-green-600 hover:bg-green-500/10"
-                        title="Post to social media"
-                      >
-                        <Send className="h-3.5 w-3.5" />
-                      </button>
-                    )}
                     {/* Delete */}
                     <button
                       onClick={() => handleDelete(draft._id)}
@@ -231,7 +188,7 @@ export default function SocialMediaPanel() {
                     )}
                     {activeTab === 'pending' && (
                       <button
-                        onClick={() => handleOpenDraft(draft, false)}
+                        onClick={() => handleOpenDraft(draft)}
                         className="mt-1 w-full rounded bg-green-600 py-1 text-xs font-medium text-white hover:bg-green-700"
                       >
                         Review & Approve

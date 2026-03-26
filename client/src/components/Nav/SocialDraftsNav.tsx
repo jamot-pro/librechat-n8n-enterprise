@@ -1,19 +1,16 @@
 import { useState, useEffect, useCallback, memo } from 'react';
 import { useSetRecoilState } from 'recoil';
 import { socialDraftState } from '~/store/socialDraft';
-import postComposerState from '~/store/postComposer';
 import { useLocalize, useAuthContext } from '~/hooks';
 import { getDraftPreview, type SocialDraftRecord } from '~/components/SocialDraft/SocialDraftModal';
 import { Eye } from 'lucide-react';
 
 const SocialDraftsNav = memo(() => {
   const [pendingDrafts, setPendingDrafts] = useState<SocialDraftRecord[]>([]);
-  const [approvedDrafts, setApprovedDrafts] = useState<SocialDraftRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const { token, isAuthenticated } = useAuthContext();
   const localize = useLocalize();
   const setSocialDraftState = useSetRecoilState(socialDraftState);
-  const setPostComposerState = useSetRecoilState(postComposerState);
 
   const showSocialDraft = import.meta.env.VITE_SOCIAL_MEDIA_AUTOMATION === 'true';
   if (!showSocialDraft) return null;
@@ -22,23 +19,14 @@ const SocialDraftsNav = memo(() => {
     if (!token || !isAuthenticated) return;
     setLoading(true);
     try {
-      const [pendingRes, approvedRes] = await Promise.all([
-        fetch('/api/social-drafts?status=pending', {
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: 'include',
-        }),
-        fetch('/api/social-drafts?status=approved', {
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: 'include',
-        }),
-      ]);
+      const pendingRes = await fetch('/api/social-drafts?status=pending', {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+      });
       const pendingData = await pendingRes.json();
-      const approvedData = await approvedRes.json();
       setPendingDrafts(pendingData.success ? pendingData.drafts.slice(0, 10) : []);
-      setApprovedDrafts(approvedData.success ? approvedData.drafts.slice(0, 10) : []);
     } catch {
       setPendingDrafts([]);
-      setApprovedDrafts([]);
     } finally {
       setLoading(false);
     }
@@ -51,25 +39,15 @@ const SocialDraftsNav = memo(() => {
   }, [fetchDrafts]);
 
   const openDraft = useCallback(
-    (draft: SocialDraftRecord, isApproved: boolean) => {
-      if (isApproved) {
-        // For approved drafts, open PostComposer with content
-        const firstDraft = Object.values(draft.drafts).find((text) => text?.trim());
-        if (firstDraft) {
-          setPostComposerState({
-            isOpen: true,
-            initialContent: firstDraft,
-          });
-        }
-      } else {
-        // For pending drafts, open Social Draft Modal
-        setSocialDraftState({ isOpen: true });
-      }
+    (draft: SocialDraftRecord) => {
+      // For pending drafts, open Social Draft Modal
+      // (Approved drafts are intentionally not shown in the left sidebar.)
+      setSocialDraftState({ isOpen: true });
     },
-    [setSocialDraftState, setPostComposerState],
+    [setSocialDraftState],
   );
 
-  if (!isAuthenticated || (pendingDrafts.length === 0 && approvedDrafts.length === 0)) {
+  if (!isAuthenticated || pendingDrafts.length === 0) {
     return null;
   }
 
@@ -84,27 +62,7 @@ const SocialDraftsNav = memo(() => {
             {pendingDrafts.map((draft) => (
               <button
                 key={draft._id}
-                onClick={() => openDraft(draft, false)}
-                className="group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-text-primary hover:bg-surface-hover"
-                title={getDraftPreview(draft.drafts)}
-              >
-                <Eye className="h-3.5 w-3.5 flex-shrink-0 text-text-secondary group-hover:text-text-primary" />
-                <span className="truncate text-xs">{getDraftPreview(draft.drafts, 8)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {approvedDrafts.length > 0 && (
-        <div>
-          <h3 className="mb-1.5 px-2 text-xs font-semibold text-text-secondary">
-            {localize('com_nav_approved_social_drafts')}
-          </h3>
-          <div className="space-y-1">
-            {approvedDrafts.map((draft) => (
-              <button
-                key={draft._id}
-                onClick={() => openDraft(draft, true)}
+                onClick={() => openDraft(draft)}
                 className="group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-text-primary hover:bg-surface-hover"
                 title={getDraftPreview(draft.drafts)}
               >

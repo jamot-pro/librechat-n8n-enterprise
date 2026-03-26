@@ -12,7 +12,7 @@ export default function TeamPage() {
         candidates={candidates}
         loading={loading}
         onAddCandidate={addCandidate}
-        onSwitchToTasks={() => navigate('/hiring/tasks')}
+        onSwitchToTasks={() => navigate('/dashboard/tasks')}
       />
     </div>
   );

@@ -17,7 +17,6 @@ import { Conversations } from '~/components/Conversations';
 import SearchBar from './SearchBar';
 import NewChat from './NewChat';
 import SocialDraftsNav from './SocialDraftsNav';
-import TasksNav from './TasksNav';
 import DivineNotifications from '~/components/Divine/DivineNotifications';
 import { cn } from '~/utils';
 import store from '~/store';
@@ -227,7 +226,6 @@ const Nav = memo(
                       {import.meta.env.VITE_SOCIAL_MEDIA_AUTOMATION === 'true' && (
                         <SocialDraftsNav />
                       )}
-                      <TasksNav />
                       <Conversations
                         conversations={conversations}
                         moveToTop={moveToTop}
