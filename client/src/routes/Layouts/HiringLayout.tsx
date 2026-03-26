@@ -4,7 +4,6 @@ import { Users, LayoutGrid, ArrowLeft } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/hiring/team', label: 'Team', icon: Users },
-  { to: '/hiring/tasks', label: 'Tasks', icon: LayoutGrid },
 ];
 
 export default function HiringLayout() {

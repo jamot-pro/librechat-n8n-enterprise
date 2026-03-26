@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -12,11 +12,13 @@ import {
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
+  Megaphone,
 } from 'lucide-react';
 import { useFeatureFlags } from '~/hooks/useFeatureFlag';
 import { FEATURES } from '~/constants/businesses';
 import type { ProfileData } from '~/components/Profile';
 import { cn } from '~/utils';
+import { useLocalize } from '~/hooks';
 
 interface MenuItem {
   id: string;
@@ -48,14 +50,22 @@ interface DashboardSidebarProps {
 export default function DashboardSidebar({ profile, isOpen, onToggle }: DashboardSidebarProps) {
   const navigate = useNavigate();
   const { features } = useFeatureFlags([FEATURES.AUDIT]);
+  const localize = useLocalize();
+  const showSocialDraft = import.meta.env.VITE_SOCIAL_MEDIA_AUTOMATION === 'true';
+  const showHiringPanel = import.meta.env.VITE_HIRING_ONBOARDING_TOOL === 'true';
+  const { pathname } = useLocation();
+  const isInDashboard = pathname.startsWith('/dashboard');
 
   const visibleItems = useMemo(() => {
     return ALL_MENU_ITEMS.filter((item) => {
       if (!item.roles.includes(profile.profileType)) return false;
       if (item.featureFlag && !features[item.featureFlag as keyof typeof features]) return false;
+      // When we navigate outside `/dashboard/*` (e.g. `/hiring/team`), hide the tasks item
+      // so the sidebar doesn't show a stale/irrelevant entry.
+      if (item.id === 'tasks' && !isInDashboard) return false;
       return true;
     });
-  }, [profile.profileType, features]);
+  }, [profile.profileType, features, isInDashboard]);
 
   return (
     <aside
@@ -102,6 +112,77 @@ export default function DashboardSidebar({ profile, isOpen, onToggle }: Dashboar
             </li>
           ))}
         </ul>
+
+        {/* Extra items surfaced under Dashboard */}
+        <div className="mt-4 space-y-1">
+          {showSocialDraft && (
+            <NavLink
+              to="/dashboard/social-draft"
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                  isActive
+                    ? 'bg-surface-active text-text-primary font-medium'
+                    : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
+                  !isOpen && 'justify-center px-0',
+                )
+              }
+              title={isOpen ? undefined : localize('com_sidepanel_social_draft')}
+            >
+              <Megaphone size={18} className="shrink-0" />
+              {isOpen && <span>{localize('com_sidepanel_social_draft')}</span>}
+            </NavLink>
+          )}
+
+          {showHiringPanel && (
+            <>
+              {isOpen && (
+                <div className="px-3 pt-2 text-xs font-semibold uppercase tracking-wider text-text-secondary">
+                  {localize('com_sidepanel_hiring_onboarding')}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <NavLink
+                  to="/hiring/team"
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                      isActive
+                        ? 'bg-surface-active text-text-primary font-medium'
+                        : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
+                      !isOpen && 'justify-center px-0',
+                    )
+                  }
+                  title={isOpen ? undefined : 'Team'}
+                >
+                  <Users size={18} className="shrink-0" />
+                  {isOpen && <span>Team</span>}
+                </NavLink>
+
+                {/* Tasks live under Dashboard now */}
+                {isInDashboard && (
+                  <NavLink
+                    to="/dashboard/tasks"
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                        isActive
+                          ? 'bg-surface-active text-text-primary font-medium'
+                          : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
+                        !isOpen && 'justify-center px-0',
+                      )
+                    }
+                    title={isOpen ? undefined : 'Tasks'}
+                  >
+                    <CheckSquare size={18} className="shrink-0" />
+                    {isOpen && <span>Tasks</span>}
+                  </NavLink>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </nav>
 
       {/* Footer */}

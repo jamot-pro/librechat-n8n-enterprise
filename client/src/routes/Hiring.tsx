@@ -2,7 +2,6 @@ import { Navigate } from 'react-router-dom';
 import HiringLayout from './Layouts/HiringLayout';
 import RouteErrorBoundary from './RouteErrorBoundary';
 import TeamPage from '~/pages/Hiring/TeamPage';
-import TasksPage from '~/pages/Hiring/TasksPage';
 import CandidateDetailPage from '~/pages/Hiring/CandidateDetailPage';
 
 const hiringRoutes = {
@@ -21,10 +20,6 @@ const hiringRoutes = {
     {
       path: 'team/:id',
       element: <CandidateDetailPage />,
-    },
-    {
-      path: 'tasks',
-      element: <TasksPage />,
     },
   ],
 };

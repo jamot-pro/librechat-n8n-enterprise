@@ -1461,17 +1461,17 @@ button {
 
 /* Webkit scrollbar */
 ::-webkit-scrollbar {
-  height: 0.1em;
-  width: 0.5rem;
+  height: 0.25em;
+  width: 0.75rem;
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(0, 0, 0, 0.22);
   border-radius: 9999px;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background-color: hsla(0, 0%, 100%, 0.1);
+  background-color: hsla(0, 0%, 100%, 0.22);
 }
 
 ::-webkit-scrollbar-track {

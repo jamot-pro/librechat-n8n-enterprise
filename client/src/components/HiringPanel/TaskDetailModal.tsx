@@ -204,7 +204,7 @@ export default function TaskDetailModal({
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(`${window.location.origin}/hiring/tasks?task=${task._id}`);
+    navigator.clipboard.writeText(`${window.location.origin}/dashboard/tasks?task=${task._id}`);
   };
 
   /** Tailwind preflight uses `appearance: none` on inputs, which breaks native date UI; `showPicker` is a reliable fallback (Chromium / modern Safari). */

@@ -184,7 +184,7 @@ export default function TaskBoard({
       {loading ? (
         <p className="py-10 text-center text-sm text-gray-400">Loading…</p>
       ) : (
-        <div className="flex flex-1 gap-4 overflow-x-auto pb-4">
+        <div className="flex flex-1 gap-4 overflow-x-scroll pb-4">
           {columns.map((col, index) => {
             const colTasks = getColTasks(col, index);
             const isOver = dragOverColumn === col._id;
