@@ -6,6 +6,9 @@ class LinkedInService {
     this.clientId = process.env.LINKEDIN_CLIENT_ID;
     this.clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
     this.redirectUri = process.env.LINKEDIN_REDIRECT_URI;
+    this.commentsClientId = process.env.LINKEDIN_COMMENTS_CLIENT_ID;
+    this.commentsClientSecret = process.env.LINKEDIN_COMMENTS_CLIENT_SECRET;
+    this.commentsRedirectUri = process.env.LINKEDIN_COMMENTS_REDIRECT_URI;
     this.apiBaseUrl = 'https://api.linkedin.com/v2';
     
     if (!this.clientId || !this.clientSecret) {
@@ -18,7 +21,11 @@ class LinkedInService {
    * @param {string} state - Secure state parameter
    * @returns {string} Authorization URL
    */
-  getAuthUrl(state) {
+  getAuthUrl(state, mode = 'posting') {
+    const isCommentsMode = mode === 'comments';
+    const clientId = isCommentsMode ? this.commentsClientId : this.clientId;
+    const redirectUri = isCommentsMode ? this.commentsRedirectUri : this.redirectUri;
+
     const scopes = [
       'openid',
       'profile',
@@ -28,8 +35,8 @@ class LinkedInService {
 
     const params = new URLSearchParams({
       response_type: 'code',
-      client_id: this.clientId,
-      redirect_uri: this.redirectUri,
+      client_id: clientId,
+      redirect_uri: redirectUri,
       state: state,
       scope: scopes.join(' '),
     });
@@ -42,16 +49,21 @@ class LinkedInService {
    * @param {string} code - Authorization code from callback
    * @returns {Promise<Object>} Token data
    */
-  async exchangeCodeForToken(code) {
+  async exchangeCodeForToken(code, mode = 'posting') {
+    const isCommentsMode = mode === 'comments';
+    const clientId = isCommentsMode ? this.commentsClientId : this.clientId;
+    const clientSecret = isCommentsMode ? this.commentsClientSecret : this.clientSecret;
+    const redirectUri = isCommentsMode ? this.commentsRedirectUri : this.redirectUri;
+
     try {
       const response = await axios.post(
         'https://www.linkedin.com/oauth/v2/accessToken',
         new URLSearchParams({
           grant_type: 'authorization_code',
           code: code,
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-          redirect_uri: this.redirectUri,
+          client_id: clientId,
+          client_secret: clientSecret,
+          redirect_uri: redirectUri,
         }),
         {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -239,15 +251,19 @@ class LinkedInService {
    * @param {string} refreshToken - User's refresh token
    * @returns {Promise<Object>} New token data
    */
-  async refreshAccessToken(refreshToken) {
+  async refreshAccessToken(refreshToken, mode = 'posting') {
+    const isCommentsMode = mode === 'comments';
+    const clientId = isCommentsMode ? this.commentsClientId : this.clientId;
+    const clientSecret = isCommentsMode ? this.commentsClientSecret : this.clientSecret;
+
     try {
       const response = await axios.post(
         'https://www.linkedin.com/oauth/v2/accessToken',
         new URLSearchParams({
           grant_type: 'refresh_token',
           refresh_token: refreshToken,
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
+          client_id: clientId,
+          client_secret: clientSecret,
         }),
         {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

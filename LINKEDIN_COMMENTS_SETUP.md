@@ -15,6 +15,140 @@ LinkedIn requires the **Community Management API** to be on a **separate app** f
 
 ---
 
+## Execution Plan (Keys Already Ready)
+
+Since posting is already working in production for your main app, this is the fastest safe path to add:
+- View comments on a post
+- Create a comment on a post
+- Reply to a comment
+
+### Phase 0 - Configuration (30-45 minutes)
+
+1. Add the comments-app credentials to `.env`:
+
+```env
+# Main app (existing - posting)
+LINKEDIN_CLIENT_ID=...
+LINKEDIN_CLIENT_SECRET=...
+LINKEDIN_REDIRECT_URI=http://localhost:3080/api/linkedin/callback
+
+# New comments app (Community Management)
+LINKEDIN_COMMENTS_CLIENT_ID=...
+LINKEDIN_COMMENTS_CLIENT_SECRET=...
+LINKEDIN_COMMENTS_REDIRECT_URI=http://localhost:3080/api/linkedin/comments/callback
+```
+
+2. Ensure redirect URI in LinkedIn comments app matches exactly:
+   - `http://localhost:3080/api/linkedin/comments/callback`
+   - Production equivalent for your deployed domain.
+
+3. Confirm comments app scopes/products are active in LinkedIn portal.
+
+### Phase 1 - Backend Dual-App Support (1 day)
+
+Goal: keep posting on the current app, and use the new app only for comments/replies.
+
+1. **Data model updates**
+   - Store comments-app tokens separately from posting tokens.
+   - Recommended: extend `SocialAccount.metadata` with a second token set (or create a second `platform` record like `linkedin_comments`).
+   - Persist:
+     - comments access token
+     - comments refresh token
+     - comments token expiry
+     - comments auth status flag
+
+2. **OAuth routes for comments app**
+   - Add dedicated connect/callback routes:
+     - `GET /api/linkedin/comments/connect`
+     - `GET /api/linkedin/comments/callback`
+   - Use `LINKEDIN_COMMENTS_*` credentials only in these routes.
+   - Keep existing posting OAuth routes unchanged.
+
+3. **Service split**
+   - In `LinkedInService`, separate token retrieval/refresh paths:
+     - posting token methods (existing)
+     - comments token methods (new)
+   - Comments/replies/read endpoints must enforce comments token availability.
+
+4. **Comments endpoints validation**
+   - `POST /api/linkedin/comments`
+   - `POST /api/linkedin/comments/:commentUrn/reply`
+   - `GET /api/linkedin/comments/:postUrn`
+   - Return explicit errors:
+     - `COMMENTS_NOT_CONNECTED`
+     - `COMMENTS_TOKEN_EXPIRED_RECONNECT_REQUIRED`
+     - `INSUFFICIENT_LINKEDIN_SCOPE`
+
+### Phase 2 - Frontend UX (0.5-1 day)
+
+1. In `LinkedInAccountSettings.tsx` add a second status block:
+   - **Posting Access**: Connected/Not Connected (existing)
+   - **Comments Access**: Connected/Not Connected (new)
+
+2. Add buttons:
+   - `Connect Comments Access`
+   - `Reconnect Comments Access`
+   - Optional: `Disconnect Comments Access`
+
+3. Add endpoint calls in UI:
+   - `GET /api/linkedin/comments/status` (new)
+   - `GET /api/linkedin/comments/connect`
+   - optional `DELETE /api/linkedin/comments/disconnect`
+
+4. In comment/reply entry points (wherever used), show actionable errors:
+   - "Comments access is not connected. Connect it in Settings."
+
+### Phase 3 - Post/Comment Linking (0.5 day)
+
+To comment/reply reliably, keep `postUrn` from published posts.
+
+1. Ensure `POST /api/linkedin/posts` response includes stable `urn`.
+2. Persist `urn` in your post/draft record if not already stored.
+3. Pass that `postUrn` to comment/reply endpoints.
+
+### Phase 4 - Test Matrix (same day)
+
+Run in this order:
+
+1. **OAuth tests**
+   - Main posting OAuth still works.
+   - Comments OAuth works independently.
+   - Reconnecting comments does not break posting.
+
+2. **Comment flow tests**
+   - Read comments for known `postUrn`.
+   - Add comment.
+   - Reply to existing comment.
+   - Verify visibility on LinkedIn UI.
+
+3. **Failure tests**
+   - Comments not connected -> clear error.
+   - Expired comments token -> refresh or reconnect flow.
+   - Invalid `postUrn` -> controlled 4xx response.
+
+4. **Multi-user isolation**
+   - User A cannot read/comment with User B tokens.
+
+### Phase 5 - Rollout (same day)
+
+1. Deploy with comments feature flag (recommended).
+2. Enable for internal users first.
+3. Monitor logs for:
+   - OAuth callback errors
+   - LinkedIn 401/403 rate
+   - token refresh failures
+4. Then enable for all users.
+
+### Definition of Done
+
+- Users can connect comments access from Settings.
+- Users can read comments from a LinkedIn post.
+- Users can comment on a post.
+- Users can reply to a comment.
+- Posting flow remains unaffected.
+
+---
+
 ## Why Two Apps?
 
 LinkedIn's reasoning:

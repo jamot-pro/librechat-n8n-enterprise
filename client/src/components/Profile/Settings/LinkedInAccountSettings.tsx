@@ -1,6 +1,8 @@
+/* eslint-disable i18next/no-literal-string */
 import React, { useState, useEffect } from 'react';
 import { useToastContext } from '@librechat/client';
 import { useAuthContext } from '~/hooks/AuthContext';
+import { useLocalize } from '~/hooks';
 import { useSearchParams } from 'react-router-dom';
 
 interface LinkedInAccount {
@@ -15,25 +17,36 @@ interface LinkedInAccount {
   };
 }
 
+interface LinkedInCommentsAccount {
+  accountName: string;
+  accountId: string;
+  connectedAt: string;
+}
+
 export default function LinkedInAccountSettings() {
   const { showToast } = useToastContext();
   const { token } = useAuthContext();
+  const localize = useLocalize();
   const [searchParams, setSearchParams] = useSearchParams();
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [connected, setConnected] = useState(false);
   const [account, setAccount] = useState<LinkedInAccount | null>(null);
+  const [commentsConnected, setCommentsConnected] = useState(false);
+  const [commentsAccount, setCommentsAccount] = useState<LinkedInCommentsAccount | null>(null);
+  const [isConnectingComments, setIsConnectingComments] = useState(false);
+  const [isDisconnectingComments, setIsDisconnectingComments] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch LinkedIn connection status
   const fetchStatus = async () => {
     if (!token) return;
-    
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch('/api/linkedin/status', {
         headers: {
@@ -48,6 +61,26 @@ export default function LinkedInAccountSettings() {
       const data = await response.json();
       setConnected(data.connected);
       setAccount(data.account);
+
+      if (data.connected) {
+        const commentsResponse = await fetch('/api/linkedin/comments/status', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (commentsResponse.ok) {
+          const commentsData = await commentsResponse.json();
+          setCommentsConnected(commentsData.connected);
+          setCommentsAccount(commentsData.account);
+        } else {
+          setCommentsConnected(false);
+          setCommentsAccount(null);
+        }
+      } else {
+        setCommentsConnected(false);
+        setCommentsAccount(null);
+      }
     } catch (err: any) {
       console.error('[LinkedIn] Failed to fetch status:', err);
       setError(err.message || 'Failed to load LinkedIn status');
@@ -69,21 +102,25 @@ export default function LinkedInAccountSettings() {
     const platform = searchParams.get('platform');
     const message = searchParams.get('message');
 
-    if (success === 'connected' && platform === 'linkedin') {
+    if ((success === 'connected' && platform === 'linkedin') || success === 'comments_connected') {
       showToast({
-        message: 'LinkedIn connected successfully!',
+        message:
+          success === 'comments_connected'
+            ? 'LinkedIn comments access connected successfully!'
+            : 'LinkedIn connected successfully!',
         status: 'success',
       });
       fetchStatus();
       setSearchParams({});
     }
 
-    if (error && platform === 'linkedin') {
+    if (error && (platform === 'linkedin' || platform === 'linkedin_comments')) {
       const errorMessages: Record<string, string> = {
         oauth_access_denied: 'You denied access to LinkedIn',
         invalid_callback: 'Invalid OAuth callback',
         connection_failed: message || 'Failed to connect LinkedIn account',
         connect_failed: 'Failed to initiate LinkedIn connection',
+        posting_not_connected: 'Connect LinkedIn posting first before enabling comments access',
       };
 
       showToast({
@@ -97,7 +134,7 @@ export default function LinkedInAccountSettings() {
   // Connect LinkedIn account
   const handleConnect = async () => {
     setIsConnecting(true);
-    
+
     try {
       // Always pass token as query parameter (works in both dev and production)
       // This avoids cookie configuration issues
@@ -141,6 +178,8 @@ export default function LinkedInAccountSettings() {
 
       setConnected(false);
       setAccount(null);
+      setCommentsConnected(false);
+      setCommentsAccount(null);
     } catch (err: any) {
       console.error('[LinkedIn] Disconnect failed:', err);
       showToast({
@@ -149,6 +188,56 @@ export default function LinkedInAccountSettings() {
       });
     } finally {
       setIsDisconnecting(false);
+    }
+  };
+
+  const handleConnectComments = async () => {
+    setIsConnectingComments(true);
+
+    try {
+      const connectUrl = `/api/linkedin/comments/connect?token=${encodeURIComponent(token || '')}`;
+      window.location.href = connectUrl;
+    } catch (err: any) {
+      showToast({
+        message: err.message || 'Failed to connect LinkedIn comments access',
+        status: 'error',
+      });
+      setIsConnectingComments(false);
+    }
+  };
+
+  const handleDisconnectComments = async () => {
+    if (!confirm('Are you sure you want to disconnect LinkedIn comments access?')) {
+      return;
+    }
+
+    setIsDisconnectingComments(true);
+    try {
+      const response = await fetch('/api/linkedin/comments/disconnect', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to disconnect LinkedIn comments access');
+      }
+
+      showToast({
+        message: 'LinkedIn comments access disconnected successfully',
+        status: 'success',
+      });
+
+      setCommentsConnected(false);
+      setCommentsAccount(null);
+    } catch (err: any) {
+      showToast({
+        message: err.message || 'Failed to disconnect LinkedIn comments access',
+        status: 'error',
+      });
+    } finally {
+      setIsDisconnectingComments(false);
     }
   };
 
@@ -165,10 +254,10 @@ export default function LinkedInAccountSettings() {
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          LinkedIn Integration
+          {localize('com_linkedin_integration_title')}
         </h2>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Connect your LinkedIn account to post, comment, and engage directly from LibreChat.
+          {localize('com_linkedin_integration_description')}
         </p>
       </div>
 
@@ -205,10 +294,8 @@ export default function LinkedInAccountSettings() {
 
             {/* Details */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                LinkedIn
-              </h3>
-              
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">LinkedIn</h3>
+
               {connected && account ? (
                 <div className="mt-2 space-y-1">
                   <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -227,9 +314,7 @@ export default function LinkedInAccountSettings() {
                   </p>
                 </div>
               ) : (
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  Not connected
-                </p>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Not connected</p>
               )}
             </div>
           </div>
@@ -257,6 +342,60 @@ export default function LinkedInAccountSettings() {
         </div>
       </div>
 
+      {/* Comments Access Card */}
+      {connected && (
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start space-x-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-100 text-3xl dark:bg-purple-900/30">
+                💬
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Comments Access
+                </h3>
+                {commentsConnected && commentsAccount ? (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Connected as{' '}
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {commentsAccount.accountName}
+                      </span>
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                      Connected on {new Date(commentsAccount.connectedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    Not connected (required for comments and replies)
+                  </p>
+                )}
+              </div>
+            </div>
+            <div>
+              {commentsConnected ? (
+                <button
+                  onClick={handleDisconnectComments}
+                  disabled={isDisconnectingComments}
+                  className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  {isDisconnectingComments ? 'Disconnecting...' : 'Disconnect'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleConnectComments}
+                  disabled={isConnectingComments}
+                  className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isConnectingComments ? 'Connecting...' : 'Connect Comments Access'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Features List */}
       <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
         <h3 className="mb-4 font-semibold text-gray-900 dark:text-white">
@@ -266,7 +405,8 @@ export default function LinkedInAccountSettings() {
           <li className="flex items-start">
             <span className="mr-3 text-green-600">✓</span>
             <span className="text-sm text-gray-700 dark:text-gray-300">
-              <strong>Post content</strong> - Share updates, articles, and thoughts with your network
+              <strong>Post content</strong> - Share updates, articles, and thoughts with your
+              network
             </span>
           </li>
           <li className="flex items-start">
@@ -284,7 +424,8 @@ export default function LinkedInAccountSettings() {
           <li className="flex items-start">
             <span className="mr-3 text-green-600">✓</span>
             <span className="text-sm text-gray-700 dark:text-gray-300">
-              <strong>AI-powered drafts</strong> - Generate LinkedIn posts using AI and approve before posting
+              <strong>AI-powered drafts</strong> - Generate LinkedIn posts using AI and approve
+              before posting
             </span>
           </li>
         </ul>
@@ -301,13 +442,14 @@ export default function LinkedInAccountSettings() {
               </h3>
               <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
                 <ol className="list-inside list-decimal space-y-1">
-                  <li>Click "Connect LinkedIn" above</li>
-                  <li>You'll be redirected to LinkedIn</li>
+                  <li>Click &quot;Connect LinkedIn&quot; above</li>
+                  <li>You&apos;ll be redirected to LinkedIn</li>
                   <li>Authorize LibreChat to access your account</li>
-                  <li>You'll be redirected back here</li>
+                  <li>You&apos;ll be redirected back here</li>
                 </ol>
                 <p className="mt-2 text-xs">
-                  Note: We only request permissions to post and engage on your behalf. We never access your private messages or connections.
+                  Note: We only request permissions to post and engage on your behalf. We never
+                  access your private messages or connections.
                 </p>
               </div>
             </div>
