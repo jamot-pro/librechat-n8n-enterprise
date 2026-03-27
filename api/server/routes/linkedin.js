@@ -16,9 +16,21 @@ function generateState(userId) {
   const payload = {
     userId,
     platform: 'linkedin',
+    mode: 'posting',
     timestamp: Date.now(),
   };
   
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '10m' });
+}
+
+function generateCommentsState(userId) {
+  const payload = {
+    userId,
+    platform: 'linkedin',
+    mode: 'comments',
+    timestamp: Date.now(),
+  };
+
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '10m' });
 }
 
@@ -40,39 +52,80 @@ function verifyState(state) {
   }
 }
 
+function getCommentsTokenData(account) {
+  return account?.metadata?.linkedinComments ?? null;
+}
+
+function setCommentsTokenData(account, tokenData) {
+  const metadata = account.metadata && typeof account.metadata === 'object' ? account.metadata : {};
+  metadata.linkedinComments = tokenData;
+  account.metadata = metadata;
+}
+
 /**
  * Check if token needs refresh and refresh if necessary
  * @param {Object} account - Social account object
  * @returns {Promise<string>} Valid access token
  */
-async function getValidAccessToken(account) {
+async function getValidAccessToken(account, { forComments = false } = {}) {
+  let accessToken = account.accessToken;
+  let refreshToken = account.refreshToken;
+  let expiresAt = account.expiresAt;
+
+  if (forComments) {
+    const commentsData = getCommentsTokenData(account);
+    if (!commentsData?.accessToken || !commentsData?.expiresAt) {
+      throw new Error('COMMENTS_NOT_CONNECTED');
+    }
+    accessToken = commentsData.accessToken;
+    refreshToken = commentsData.refreshToken;
+    expiresAt = commentsData.expiresAt;
+  }
+
   // Check if token is expired or will expire in next 5 minutes
-  const expiresAt = new Date(account.expiresAt);
+  const expiresAtDate = new Date(expiresAt);
   const now = new Date();
   const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
 
-  if (expiresAt <= fiveMinutesFromNow && account.refreshToken) {
+  if (expiresAtDate <= fiveMinutesFromNow && refreshToken) {
     try {
-      logger.info('[LinkedIn] Refreshing access token for user', account.userId);
+      logger.info(
+        `[LinkedIn] Refreshing ${forComments ? 'comments' : 'posting'} access token for user`,
+        account.userId,
+      );
       
       const { accessToken, expiresIn, refreshToken } = await LinkedInService.refreshAccessToken(
-        account.refreshToken
+        refreshToken,
+        forComments ? 'comments' : 'posting',
       );
 
-      // Update account with new token
-      account.accessToken = accessToken;
-      account.refreshToken = refreshToken;
-      account.expiresAt = new Date(Date.now() + expiresIn * 1000);
+      if (forComments) {
+        setCommentsTokenData(account, {
+          accessToken,
+          refreshToken,
+          expiresAt: new Date(Date.now() + expiresIn * 1000),
+          isConnected: true,
+          connectedAt: getCommentsTokenData(account)?.connectedAt ?? new Date(),
+        });
+      } else {
+        account.accessToken = accessToken;
+        account.refreshToken = refreshToken;
+        account.expiresAt = new Date(Date.now() + expiresIn * 1000);
+      }
       await account.save();
 
       return accessToken;
     } catch (error) {
-      logger.error('[LinkedIn] Token refresh failed:', error.message);
-      throw new Error('LinkedIn token expired. Please reconnect your account.');
+      logger.error(`[LinkedIn] ${forComments ? 'Comments' : 'Posting'} token refresh failed:`, error.message);
+      throw new Error(
+        forComments
+          ? 'COMMENTS_TOKEN_EXPIRED_RECONNECT_REQUIRED'
+          : 'LinkedIn token expired. Please reconnect your account.',
+      );
     }
   }
 
-  return account.accessToken;
+  return accessToken;
 }
 
 /**
@@ -168,6 +221,70 @@ router.get('/connect', async (req, res) => {
 });
 
 /**
+ * GET /api/linkedin/comments/connect
+ * Initiate LinkedIn OAuth flow for comments app
+ */
+router.get('/comments/connect', async (req, res) => {
+  const clientUrl = process.env.LIBRECHAT_URL || process.env.DOMAIN_CLIENT;
+
+  try {
+    let userId;
+    const tokenFromQuery = req.query.token;
+
+    if (tokenFromQuery) {
+      try {
+        const decoded = jwt.verify(tokenFromQuery, process.env.JWT_SECRET);
+        userId = decoded.id;
+        const state = generateCommentsState(userId);
+        const authUrl = LinkedInService.getAuthUrl(state, 'comments');
+        return res.redirect(authUrl);
+      } catch (error) {
+        logger.error('[LinkedIn/Comments] Invalid token in query parameter:', error.message);
+        return res.redirect(
+          `${clientUrl}/?settings=true&tab=social&error=invalid_token&platform=linkedin_comments`,
+        );
+      }
+    }
+
+    const jwtCookie = req.cookies?.token || req.cookies?.jwt || req.cookies?.refreshToken;
+    if (jwtCookie) {
+      try {
+        const decoded = jwt.verify(jwtCookie, process.env.JWT_SECRET);
+        userId = decoded.id;
+        const state = generateCommentsState(userId);
+        const authUrl = LinkedInService.getAuthUrl(state, 'comments');
+        return res.redirect(authUrl);
+      } catch (error) {
+        logger.error('[LinkedIn/Comments] Invalid JWT in cookie:', error.message);
+      }
+    }
+
+    passport.authenticate('jwt', { session: false }, (err, user, info) => {
+      if (err || !user) {
+        logger.error('[LinkedIn/Comments] Auth error:', err || info);
+        return res.redirect(
+          `${clientUrl}/?settings=true&tab=social&error=unauthorized&platform=linkedin_comments`,
+        );
+      }
+
+      try {
+        const state = generateCommentsState(user.id);
+        const authUrl = LinkedInService.getAuthUrl(state, 'comments');
+        res.redirect(authUrl);
+      } catch (error) {
+        logger.error('[LinkedIn/Comments] Failed to generate auth URL:', error);
+        res.redirect(
+          `${clientUrl}/?settings=true&tab=social&error=connect_failed&platform=linkedin_comments`,
+        );
+      }
+    })(req, res);
+  } catch (error) {
+    logger.error('[LinkedIn/Comments] Connect initiation failed:', error);
+    res.redirect(`${clientUrl}/?settings=true&tab=social&error=connect_failed&platform=linkedin_comments`);
+  }
+});
+
+/**
  * GET /api/linkedin/callback
  * LinkedIn OAuth callback handler
  * Note: This route does NOT use requireJwtAuth because the state parameter contains the userId
@@ -231,6 +348,72 @@ router.get('/callback', async (req, res) => {
 });
 
 /**
+ * GET /api/linkedin/comments/callback
+ * LinkedIn comments app OAuth callback handler
+ */
+router.get('/comments/callback', async (req, res) => {
+  const { code, state, error: oauthError } = req.query;
+  const clientUrl = process.env.LIBRECHAT_URL || process.env.DOMAIN_CLIENT;
+
+  if (oauthError) {
+    logger.error(`[LinkedIn/Comments] OAuth error: ${oauthError}`);
+    return res.redirect(
+      `${clientUrl}/?settings=true&tab=social&error=oauth_${oauthError}&platform=linkedin_comments`,
+    );
+  }
+
+  if (!code || !state) {
+    logger.error('[LinkedIn/Comments] Missing code or state in callback');
+    return res.redirect(`${clientUrl}/?settings=true&tab=social&error=invalid_callback&platform=linkedin_comments`);
+  }
+
+  try {
+    const decoded = verifyState(state);
+    if (decoded.mode !== 'comments') {
+      throw new Error('Invalid OAuth mode for comments callback');
+    }
+
+    const { accessToken, refreshToken, expiresIn } = await LinkedInService.exchangeCodeForToken(
+      code,
+      'comments',
+    );
+
+    const profile = await LinkedInService.getUserProfile(accessToken);
+
+    const account = await SocialAccount.findOne({
+      userId: decoded.userId,
+      platform: 'linkedin',
+      isActive: true,
+    });
+
+    if (!account) {
+      return res.redirect(
+        `${clientUrl}/?settings=true&tab=social&error=posting_not_connected&platform=linkedin_comments`,
+      );
+    }
+
+    setCommentsTokenData(account, {
+      accessToken,
+      refreshToken,
+      expiresAt: new Date(Date.now() + expiresIn * 1000),
+      isConnected: true,
+      connectedAt: new Date(),
+      accountName: profile.name || profile.email,
+      accountId: profile.sub,
+    });
+    await account.save();
+
+    logger.info(`[LinkedIn/Comments] Successfully connected comments access for user ${decoded.userId}`);
+    return res.redirect(`${clientUrl}/?settings=true&tab=social&success=comments_connected&platform=linkedin`);
+  } catch (error) {
+    logger.error('[LinkedIn/Comments] OAuth callback failed:', error);
+    return res.redirect(
+      `${clientUrl}/?settings=true&tab=social&error=connection_failed&platform=linkedin_comments&message=${encodeURIComponent(error.message)}`,
+    );
+  }
+});
+
+/**
  * GET /api/linkedin/status
  * Get LinkedIn connection status for current user
  */
@@ -265,6 +448,41 @@ router.get('/status', requireJwtAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/linkedin/comments/status
+ * Get LinkedIn comments-app connection status for current user
+ */
+router.get('/comments/status', requireJwtAuth, async (req, res) => {
+  try {
+    const account = await SocialAccount.findOne({
+      userId: req.user.id,
+      platform: 'linkedin',
+      isActive: true,
+    }).select('-accessToken -refreshToken');
+
+    const commentsData = getCommentsTokenData(account);
+
+    if (!account || !commentsData?.isConnected || !commentsData?.accessToken) {
+      return res.json({
+        connected: false,
+        account: null,
+      });
+    }
+
+    return res.json({
+      connected: true,
+      account: {
+        accountName: commentsData.accountName || account.accountName,
+        accountId: commentsData.accountId || account.accountId,
+        connectedAt: commentsData.connectedAt || account.updatedAt,
+      },
+    });
+  } catch (error) {
+    logger.error('[LinkedIn/Comments] Failed to get status:', error);
+    return res.status(500).json({ error: 'Failed to get LinkedIn comments status' });
+  }
+});
+
+/**
  * POST /api/linkedin/posts
  * Create a post on LinkedIn
  */
@@ -290,7 +508,7 @@ router.post('/posts', requireJwtAuth, async (req, res) => {
     }
 
     // Get valid access token (refreshes if needed)
-    const accessToken = await getValidAccessToken(account);
+    const accessToken = await getValidAccessToken(account, { forComments: true });
 
     // Create post
     const personUrn = `urn:li:person:${account.accountId}`;
@@ -349,7 +567,7 @@ router.post('/comments', requireJwtAuth, async (req, res) => {
       });
     }
 
-    const accessToken = await getValidAccessToken(account);
+    const accessToken = await getValidAccessToken(account, { forComments: true });
 
     const result = await LinkedInService.postComment(
       accessToken,
@@ -371,8 +589,13 @@ router.post('/comments', requireJwtAuth, async (req, res) => {
   } catch (error) {
     logger.error('[LinkedIn] Failed to post comment:', error);
     res.status(500).json({
-      error: 'Failed to post comment',
-      message: error.message,
+      error: error.message || 'Failed to post comment',
+      message:
+        error.message === 'COMMENTS_NOT_CONNECTED'
+          ? 'Comments access is not connected. Please connect comments access in Settings.'
+          : error.message === 'COMMENTS_TOKEN_EXPIRED_RECONNECT_REQUIRED'
+            ? 'LinkedIn comments token expired. Please reconnect comments access.'
+            : error.message,
     });
   }
 });
@@ -402,7 +625,7 @@ router.post('/comments/:commentUrn/reply', requireJwtAuth, async (req, res) => {
       });
     }
 
-    const accessToken = await getValidAccessToken(account);
+    const accessToken = await getValidAccessToken(account, { forComments: true });
 
     const result = await LinkedInService.replyToComment(
       accessToken,
@@ -424,8 +647,13 @@ router.post('/comments/:commentUrn/reply', requireJwtAuth, async (req, res) => {
   } catch (error) {
     logger.error('[LinkedIn] Failed to reply to comment:', error);
     res.status(500).json({
-      error: 'Failed to reply to comment',
-      message: error.message,
+      error: error.message || 'Failed to reply to comment',
+      message:
+        error.message === 'COMMENTS_NOT_CONNECTED'
+          ? 'Comments access is not connected. Please connect comments access in Settings.'
+          : error.message === 'COMMENTS_TOKEN_EXPIRED_RECONNECT_REQUIRED'
+            ? 'LinkedIn comments token expired. Please reconnect comments access.'
+            : error.message,
     });
   }
 });
@@ -450,7 +678,7 @@ router.get('/comments/:postUrn', requireJwtAuth, async (req, res) => {
       });
     }
 
-    const accessToken = await getValidAccessToken(account);
+    const accessToken = await getValidAccessToken(account, { forComments: true });
 
     const comments = await LinkedInService.getComments(accessToken, postUrn);
 
@@ -468,7 +696,47 @@ router.get('/comments/:postUrn', requireJwtAuth, async (req, res) => {
   } catch (error) {
     logger.error('[LinkedIn] Failed to get comments:', error);
     res.status(500).json({
-      error: 'Failed to get comments',
+      error: error.message || 'Failed to get comments',
+      message:
+        error.message === 'COMMENTS_NOT_CONNECTED'
+          ? 'Comments access is not connected. Please connect comments access in Settings.'
+          : error.message === 'COMMENTS_TOKEN_EXPIRED_RECONNECT_REQUIRED'
+            ? 'LinkedIn comments token expired. Please reconnect comments access.'
+            : error.message,
+    });
+  }
+});
+
+/**
+ * DELETE /api/linkedin/comments/disconnect
+ * Disconnect LinkedIn comments access while keeping posting connected
+ */
+router.delete('/comments/disconnect', requireJwtAuth, async (req, res) => {
+  try {
+    const account = await SocialAccount.findOne({
+      userId: req.user.id,
+      platform: 'linkedin',
+      isActive: true,
+    });
+
+    if (!account) {
+      return res.status(404).json({ error: 'LinkedIn account not found' });
+    }
+
+    const metadata = account.metadata && typeof account.metadata === 'object' ? account.metadata : {};
+    delete metadata.linkedinComments;
+    account.metadata = metadata;
+    await account.save();
+
+    logger.info(`[LinkedIn/Comments] Comments access disconnected for user ${req.user.id}`);
+    return res.json({
+      success: true,
+      message: 'LinkedIn comments access disconnected successfully',
+    });
+  } catch (error) {
+    logger.error('[LinkedIn/Comments] Failed to disconnect comments access:', error);
+    return res.status(500).json({
+      error: 'Failed to disconnect LinkedIn comments access',
       message: error.message,
     });
   }

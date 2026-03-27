@@ -7,6 +7,7 @@ import { socialDraftState } from '~/store/socialDraft';
 import postComposerState from '~/store/postComposer';
 import type { SocialDraftRecord } from '~/components/SocialDraft/SocialDraftModal';
 import { getDraftPreview } from '~/components/SocialDraft/SocialDraftModal';
+import LinkedInEngagementSection from '~/components/Dashboard/LinkedInEngagementSection';
 
 const PLATFORM_LABELS: Record<string, string> = {
   linkedin: 'LinkedIn',
@@ -122,6 +123,8 @@ export default function SocialDraftPage() {
 
   return (
     <div className="flex h-full flex-col p-6">
+      <LinkedInEngagementSection />
+
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-text-primary">Social Draft</h2>

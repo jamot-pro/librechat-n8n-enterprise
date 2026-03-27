@@ -12,11 +12,15 @@ export function HiringPanelModal() {
 
   useEffect(() => {
     document.body.style.overflow = state.isOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [state.isOpen]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && state.isOpen) handleClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && state.isOpen) handleClose();
+    };
     if (state.isOpen) window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [state.isOpen]);
@@ -33,7 +37,14 @@ export function HiringPanelModal() {
       />
       <div
         className="rounded-2xl bg-white shadow-2xl dark:bg-gray-900"
-        style={{ position: 'fixed', inset: '16px', zIndex: 999, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        style={{
+          position: 'fixed',
+          inset: '16px',
+          zIndex: 999,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
         role="dialog"
         aria-modal="true"
         aria-label="Hiring & Onboarding"
