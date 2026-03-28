@@ -1,5 +1,5 @@
 /* eslint-disable i18next/no-literal-string */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useToastContext } from '@librechat/client';
 import { useAuthContext } from '~/hooks/AuthContext';
 import { useLocalize } from '~/hooks';
@@ -41,7 +41,7 @@ export default function LinkedInAccountSettings() {
   const [error, setError] = useState<string | null>(null);
 
   // Fetch LinkedIn connection status
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     if (!token) return;
 
     setIsLoading(true);
@@ -52,6 +52,7 @@ export default function LinkedInAccountSettings() {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        credentials: 'include',
       });
 
       if (!response.ok) {
@@ -67,6 +68,7 @@ export default function LinkedInAccountSettings() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
+          credentials: 'include',
         });
 
         if (commentsResponse.ok) {
@@ -87,16 +89,18 @@ export default function LinkedInAccountSettings() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     if (token) {
-      fetchStatus();
+      void fetchStatus();
     }
-  }, [token]);
+  }, [token, fetchStatus]);
 
-  // Handle OAuth callback
+  // Handle OAuth callback — wait for auth token so status fetch sees the saved connection
   useEffect(() => {
+    if (!token) return;
+
     const success = searchParams.get('success');
     const error = searchParams.get('error');
     const platform = searchParams.get('platform');
@@ -110,8 +114,8 @@ export default function LinkedInAccountSettings() {
             : 'LinkedIn connected successfully!',
         status: 'success',
       });
-      fetchStatus();
-      setSearchParams({});
+      void fetchStatus().finally(() => setSearchParams({}));
+      return;
     }
 
     if (error && (platform === 'linkedin' || platform === 'linkedin_comments')) {
@@ -129,7 +133,7 @@ export default function LinkedInAccountSettings() {
       });
       setSearchParams({});
     }
-  }, [searchParams, showToast, setSearchParams]);
+  }, [token, searchParams, showToast, setSearchParams, fetchStatus]);
 
   // Connect LinkedIn account
   const handleConnect = async () => {

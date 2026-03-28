@@ -63,6 +63,16 @@ function setCommentsTokenData(account, tokenData) {
 }
 
 /**
+ * Remove nested OAuth blobs from metadata before JSON (GET /status must not leak comment tokens).
+ * @param {Record<string, unknown>|undefined} metadata
+ */
+function sanitizeLinkedInMetadataForClient(metadata) {
+  if (!metadata || typeof metadata !== 'object') return metadata;
+  const { linkedinComments: _omit, ...rest } = metadata;
+  return rest;
+}
+
+/**
  * Check if token needs refresh and refresh if necessary
  * @param {Object} account - Social account object
  * @returns {Promise<string>} Valid access token
@@ -317,23 +327,23 @@ router.get('/callback', async (req, res) => {
     // Get user profile
     const profile = await LinkedInService.getUserProfile(accessToken);
 
-    // Save to database
+    // Save posting tokens; merge profile fields into metadata without wiping metadata.linkedinComments
     await SocialAccount.findOneAndUpdate(
-      { userId, platform: 'linkedin' },
+      { userId: String(userId), platform: 'linkedin' },
       {
-        userId,
-        platform: 'linkedin',
-        accessToken,
-        refreshToken,
-        expiresAt: new Date(Date.now() + expiresIn * 1000),
-        accountName: profile.name || profile.email,
-        accountId: profile.sub,
-        isActive: true,
-        metadata: {
-          email: profile.email,
-          picture: profile.picture,
-          givenName: profile.given_name,
-          familyName: profile.family_name,
+        $set: {
+          userId: String(userId),
+          platform: 'linkedin',
+          accessToken,
+          refreshToken,
+          expiresAt: new Date(Date.now() + expiresIn * 1000),
+          accountName: profile.name || profile.email,
+          accountId: profile.sub,
+          isActive: true,
+          'metadata.email': profile.email,
+          'metadata.picture': profile.picture,
+          'metadata.givenName': profile.given_name,
+          'metadata.familyName': profile.family_name,
         },
       },
       { upsert: true, new: true }
@@ -381,7 +391,7 @@ router.get('/comments/callback', async (req, res) => {
     const profile = await LinkedInService.getUserProfile(accessToken);
 
     const account = await SocialAccount.findOne({
-      userId: decoded.userId,
+      userId: String(decoded.userId),
       platform: 'linkedin',
       isActive: true,
     });
@@ -419,11 +429,13 @@ router.get('/comments/callback', async (req, res) => {
  */
 router.get('/status', requireJwtAuth, async (req, res) => {
   try {
+    // Do not use .select('-accessToken') — in Mongoose, that can strip nested paths like
+    // metadata.linkedinComments.accessToken and break the comments integration.
     const account = await SocialAccount.findOne({
-      userId: req.user.id,
+      userId: String(req.user.id),
       platform: 'linkedin',
       isActive: true,
-    }).select('-accessToken -refreshToken');
+    }).select('userId platform isActive accountName accountId metadata createdAt');
 
     if (!account) {
       return res.json({
@@ -438,7 +450,7 @@ router.get('/status', requireJwtAuth, async (req, res) => {
         accountName: account.accountName,
         accountId: account.accountId,
         connectedAt: account.createdAt,
-        metadata: account.metadata,
+        metadata: sanitizeLinkedInMetadataForClient(account.metadata),
       },
     });
   } catch (error) {
@@ -454,10 +466,10 @@ router.get('/status', requireJwtAuth, async (req, res) => {
 router.get('/comments/status', requireJwtAuth, async (req, res) => {
   try {
     const account = await SocialAccount.findOne({
-      userId: req.user.id,
+      userId: String(req.user.id),
       platform: 'linkedin',
       isActive: true,
-    }).select('-accessToken -refreshToken');
+    }).select('userId platform isActive accountName accountId metadata updatedAt');
 
     const commentsData = getCommentsTokenData(account);
 
