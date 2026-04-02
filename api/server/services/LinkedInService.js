@@ -10,6 +10,9 @@ class LinkedInService {
     this.commentsClientSecret = process.env.LINKEDIN_COMMENTS_CLIENT_SECRET;
     this.commentsRedirectUri = process.env.LINKEDIN_COMMENTS_REDIRECT_URI;
     this.apiBaseUrl = 'https://api.linkedin.com/v2';
+    /** REST Posts API (Community Management) — requires Linkedin-Version header */
+    this.restBaseUrl = 'https://api.linkedin.com/rest';
+    this.restApiVersion = process.env.LINKEDIN_REST_API_VERSION || '202502';
     
     if (!this.clientId || !this.clientSecret) {
       logger.warn('[LinkedInService] LinkedIn credentials not configured');
@@ -26,12 +29,15 @@ class LinkedInService {
     const clientId = isCommentsMode ? this.commentsClientId : this.clientId;
     const redirectUri = isCommentsMode ? this.commentsRedirectUri : this.redirectUri;
 
-    const scopes = [
-      'openid',
-      'profile',
-      'email',
-      'w_member_social', // Post on behalf of user
-    ];
+    const scopes = isCommentsMode
+      ? [
+          'openid',
+          'profile',
+          'email',
+          'w_member_social',
+          'r_member_social', // Read posts + comments (Community Management API)
+        ]
+      : ['openid', 'profile', 'email', 'w_member_social'];
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -219,11 +225,75 @@ class LinkedInService {
   }
 
   /**
-   * Get comments on a LinkedIn post
-   * @param {string} accessToken - User's access token
-   * @param {string} postUrn - URN of the post
-   * @returns {Promise<Array>} Array of comments
+   * List recent posts authored by a member (REST Posts API finder q=author).
+   * Requires r_member_social on the token (Community Management product).
+   * @see https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api
    */
+  async listMemberPosts(accessToken, personUrn, { count = 20 } = {}) {
+    try {
+      const response = await axios.get(`${this.restBaseUrl}/posts`, {
+        params: {
+          q: 'author',
+          author: personUrn,
+          count: Math.min(Math.max(Number(count) || 20, 1), 100),
+          sortBy: 'LAST_MODIFIED',
+          viewContext: 'AUTHOR',
+        },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'X-Restli-Protocol-Version': '2.0.0',
+          'Linkedin-Version': this.restApiVersion,
+        },
+      });
+
+      const d = response.data;
+      const raw =
+        d?.elements ??
+        d?.data ??
+        (Array.isArray(d) ? d : []);
+      const elements = Array.isArray(raw) ? raw : [];
+
+      return elements.map((p) => ({
+        id: p.id,
+        urn: p.id,
+        preview: LinkedInService._extractCommentaryPreview(p.commentary),
+        lifecycleState: p.lifecycleState,
+        createdAt: p.createdAt != null ? new Date(p.createdAt) : null,
+        lastModifiedAt: p.lastModifiedAt != null ? new Date(p.lastModifiedAt) : null,
+      }));
+    } catch (error) {
+      const status = error.response?.status;
+      const data = error.response?.data;
+      logger.error('[LinkedIn] listMemberPosts failed:', { status, body: data || error.message, personUrn });
+      const msg =
+        (typeof data?.message === 'string' && data.message) ||
+        data?.errorDetails?.[0]?.message ||
+        '';
+      if (status === 403) {
+        throw new Error(
+          'LinkedIn denied listing your posts. Reconnect Comments Access after enabling r_member_social (Community Management).',
+        );
+      }
+      throw new Error(
+        msg ? `LinkedIn: ${msg}` : `Failed to list posts${status ? ` (HTTP ${status})` : ''}`,
+      );
+    }
+  }
+
+  /** @param {unknown} commentary — little-text or string */
+  static _extractCommentaryPreview(commentary) {
+    if (commentary == null) return '';
+    if (typeof commentary === 'string') return commentary.slice(0, 400);
+    if (typeof commentary === 'object' && commentary !== null) {
+      const t = /** @type {{ text?: unknown }} */ (commentary).text;
+      if (typeof t === 'string') return t.slice(0, 400);
+      if (t && typeof t === 'object' && 'text' in t && typeof /** @type {{ text: string }} */ (t).text === 'string') {
+        return /** @type {{ text: string }} */ (t).text.slice(0, 400);
+      }
+    }
+    return '';
+  }
+
   async getComments(accessToken, postUrn) {
     try {
       const response = await axios.get(
@@ -241,8 +311,36 @@ class LinkedInService {
 
       return response.data.elements || [];
     } catch (error) {
-      logger.error('[LinkedIn] Get comments failed:', error.response?.data || error.message);
-      throw new Error('Failed to get comments from LinkedIn');
+      const status = error.response?.status;
+      const data = error.response?.data;
+      logger.error('[LinkedIn] Get comments failed:', {
+        status,
+        postUrn,
+        body: data || error.message,
+      });
+
+      const linkedInMsg =
+        (typeof data?.message === 'string' && data.message) ||
+        data?.errorDetails?.[0]?.message ||
+        data?.serviceErrorCode ||
+        '';
+
+      if (status === 403) {
+        throw new Error(
+          'LinkedIn refused to load comments. Your app may need permission to read social data (e.g. r_member_social), or the post may be private.',
+        );
+      }
+      if (status === 404) {
+        throw new Error(
+          `No comments thread found for this URN. Try the feed URL, or an urn:li:activity:… / urn:li:ugcPost:… from “Copy link to post”. ${linkedInMsg}`.trim(),
+        );
+      }
+
+      throw new Error(
+        linkedInMsg
+          ? `LinkedIn: ${linkedInMsg}`
+          : `Failed to get comments from LinkedIn${status ? ` (HTTP ${status})` : ''}`,
+      );
     }
   }
 
