@@ -2,22 +2,14 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useToastContext } from '@librechat/client';
 import { useAuthContext, useLocalize } from '~/hooks';
+import { parseLinkedInPostUrn } from '~/utils/parseLinkedInPostUrn';
+import { cn } from '~/utils';
 
-/** Extract LinkedIn post URN from pasted URL or raw URN. */
-export function parseLinkedInPostUrn(raw: string): string | null {
-  const s = raw.trim();
-  if (!s) return null;
-  try {
-    const decoded = decodeURIComponent(s);
-    if (decoded !== s) return parseLinkedInPostUrn(decoded);
-  } catch {
-    /* ignore */
-  }
-  const urnMatch = s.match(/urn:li:(?:activity|ugcPost|share):[0-9A-Za-z_-]+/);
-  if (urnMatch) return urnMatch[0];
-  const activityDash = s.match(/activity-(\d{10,20})/);
-  if (activityDash) return `urn:li:activity:${activityDash[1]}`;
-  return null;
+interface MyPostRow {
+  id?: string;
+  urn: string;
+  preview: string;
+  lifecycleState?: string;
 }
 
 interface CommentRow {
@@ -47,6 +39,8 @@ export default function LinkedInEngagementSection() {
   const [replyingToUrn, setReplyingToUrn] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [postingReply, setPostingReply] = useState(false);
+  const [myPosts, setMyPosts] = useState<MyPostRow[]>([]);
+  const [loadingMyPosts, setLoadingMyPosts] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     if (!token) {
@@ -87,6 +81,40 @@ export default function LinkedInEngagementSection() {
   useEffect(() => {
     void fetchStatus();
   }, [fetchStatus]);
+
+  useEffect(() => {
+    if (!token || !postingConnected || !commentsConnected) {
+      setMyPosts([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingMyPosts(true);
+    void (async () => {
+      try {
+        const res = await fetch('/api/linkedin/member/posts?count=25', {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || data.error || 'Failed to load your posts');
+        }
+        setMyPosts(Array.isArray(data.posts) ? data.posts : []);
+      } catch (e: unknown) {
+        if (!cancelled) {
+          const msg = e instanceof Error ? e.message : String(e);
+          showToast({ message: msg, status: 'error' });
+          setMyPosts([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingMyPosts(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, postingConnected, commentsConnected, showToast]);
 
   const handleConnectComments = () => {
     if (!token) return;
@@ -240,6 +268,48 @@ export default function LinkedInEngagementSection() {
 
       {commentsConnected && (
         <>
+          <div className="mb-4 rounded-lg border border-border-light bg-surface-secondary/50 p-3 dark:border-border-medium">
+            <p className="mb-2 text-xs font-medium text-text-secondary">
+              {localize('com_social_draft_linkedin_your_posts')}
+            </p>
+            {loadingMyPosts && (
+              <p className="text-sm text-text-secondary">{localize('com_ui_loading')}</p>
+            )}
+            {!loadingMyPosts && myPosts.length === 0 && (
+              <p className="text-sm text-text-secondary">
+                {localize('com_social_draft_linkedin_no_posts_yet')}
+              </p>
+            )}
+            {myPosts.length > 0 && (
+              <ul className="max-h-52 space-y-1.5 overflow-y-auto">
+                {myPosts.map((p) => (
+                  <li key={p.urn}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPostInput(p.preview || p.urn);
+                        void loadComments(p.urn);
+                      }}
+                      className={cn(
+                        'w-full rounded-md border px-3 py-2 text-left text-sm transition-colors',
+                        resolvedUrn === p.urn
+                          ? 'border-blue-500 bg-blue-500/10 text-text-primary'
+                          : 'border-border-medium bg-surface-primary hover:bg-surface-hover text-text-primary',
+                      )}
+                    >
+                      <span className="line-clamp-2">
+                        {p.preview?.trim() ? p.preview : p.urn}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-xs text-text-secondary">
+              {localize('com_social_draft_linkedin_or_paste_link')}
+            </p>
+          </div>
+
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="min-w-0 flex-1">
               <label className="mb-1 block text-xs font-medium text-text-secondary">

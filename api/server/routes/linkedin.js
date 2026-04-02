@@ -6,6 +6,15 @@ const { requireJwtAuth } = require('../middleware');
 const SocialAccount = require('~/models/SocialAccount');
 const LinkedInService = require('../services/LinkedInService');
 const logger = require('~/config/winston');
+const { parseLinkedInPostUrn } = require('../utils/parseLinkedInPostUrn');
+
+function tryDecodeURIComponent(s) {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
 
 /**
  * Generate secure OAuth state parameter
@@ -60,6 +69,8 @@ function setCommentsTokenData(account, tokenData) {
   const metadata = account.metadata && typeof account.metadata === 'object' ? account.metadata : {};
   metadata.linkedinComments = tokenData;
   account.metadata = metadata;
+  // Required for Schema.Types.Mixed — otherwise nested changes are not written on save()
+  account.markModified('metadata');
 }
 
 /**
@@ -413,7 +424,10 @@ router.get('/comments/callback', async (req, res) => {
     });
     await account.save();
 
-    logger.info(`[LinkedIn/Comments] Successfully connected comments access for user ${decoded.userId}`);
+    logger.info('[LinkedIn/Comments] Comments OAuth saved', {
+      userId: String(decoded.userId),
+      hasLinkedinCommentsAfterSave: !!account.metadata?.linkedinComments,
+    });
     return res.redirect(`${clientUrl}/?settings=true&tab=social&success=comments_connected&platform=linkedin`);
   } catch (error) {
     logger.error('[LinkedIn/Comments] OAuth callback failed:', error);
@@ -474,6 +488,19 @@ router.get('/comments/status', requireJwtAuth, async (req, res) => {
     const commentsData = getCommentsTokenData(account);
 
     if (!account || !commentsData?.isConnected || !commentsData?.accessToken) {
+      // Safe diagnostics (no token values) — search logs for this when UI still asks to connect after OAuth
+      if (account) {
+        logger.warn('[LinkedIn/Comments] Status: not connected', {
+          userId: String(req.user.id),
+          hasLinkedinCommentsKey: !!account.metadata?.linkedinComments,
+          commentsIsConnected: !!commentsData?.isConnected,
+          hasAccessToken: !!(commentsData?.accessToken && String(commentsData.accessToken).length > 0),
+        });
+      } else {
+        logger.warn('[LinkedIn/Comments] Status: no linkedin SocialAccount', {
+          userId: String(req.user.id),
+        });
+      }
       return res.json({
         connected: false,
         account: null,
@@ -491,6 +518,42 @@ router.get('/comments/status', requireJwtAuth, async (req, res) => {
   } catch (error) {
     logger.error('[LinkedIn/Comments] Failed to get status:', error);
     return res.status(500).json({ error: 'Failed to get LinkedIn comments status' });
+  }
+});
+
+/**
+ * GET /api/linkedin/member/posts
+ * Recent posts authored by the member (LinkedIn REST Posts API, q=author).
+ * Uses the comments-app token; requires r_member_social (Community Management) on that app.
+ */
+router.get('/member/posts', requireJwtAuth, async (req, res) => {
+  try {
+    const account = await SocialAccount.findOne({
+      userId: String(req.user.id),
+      platform: 'linkedin',
+      isActive: true,
+    });
+
+    if (!account?.accountId) {
+      return res.status(400).json({
+        error: 'linkedin_not_configured',
+        message: 'Connect LinkedIn (posting) first so we know your member id.',
+      });
+    }
+
+    const accessToken = await getValidAccessToken(account, { forComments: true });
+    const personUrn = `urn:li:person:${account.accountId}`;
+    const count = Math.min(Math.max(Number(req.query.count) || 20, 1), 100);
+
+    const posts = await LinkedInService.listMemberPosts(accessToken, personUrn, { count });
+
+    res.json({ success: true, posts });
+  } catch (error) {
+    logger.error('[LinkedIn] Failed to list member posts:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to list posts',
+      message: error.message,
+    });
   }
 });
 
@@ -520,7 +583,8 @@ router.post('/posts', requireJwtAuth, async (req, res) => {
     }
 
     // Get valid access token (refreshes if needed)
-    const accessToken = await getValidAccessToken(account, { forComments: true });
+    // Posting should use the *posting* token (LinkedIn posting app), not the comments token.
+    const accessToken = await getValidAccessToken(account);
 
     // Create post
     const personUrn = `urn:li:person:${account.accountId}`;
@@ -557,11 +621,16 @@ router.post('/posts', requireJwtAuth, async (req, res) => {
  */
 router.post('/comments', requireJwtAuth, async (req, res) => {
   try {
-    const { postUrn, comment } = req.body;
+    const { postUrn: rawPostUrn, comment } = req.body;
 
     if (!comment || !comment.trim()) {
       return res.status(400).json({ error: 'Comment text is required' });
     }
+
+    const postUrn =
+      rawPostUrn &&
+      (parseLinkedInPostUrn(String(rawPostUrn)) ||
+        parseLinkedInPostUrn(tryDecodeURIComponent(String(rawPostUrn))));
 
     if (!postUrn) {
       return res.status(400).json({ error: 'Post URN is required' });
@@ -676,7 +745,17 @@ router.post('/comments/:commentUrn/reply', requireJwtAuth, async (req, res) => {
  */
 router.get('/comments/:postUrn', requireJwtAuth, async (req, res) => {
   try {
-    const { postUrn } = req.params;
+    const rawParam = req.params.postUrn ? String(req.params.postUrn) : '';
+    const postUrn =
+      parseLinkedInPostUrn(rawParam) || parseLinkedInPostUrn(tryDecodeURIComponent(rawParam));
+
+    if (!postUrn) {
+      return res.status(400).json({
+        error: 'invalid_post_urn',
+        message:
+          'Could not find a post URN. Paste the post’s “Copy link”, or urn:li:activity:… / urn:li:ugcPost:…. For a comment link, we use the parent post’s activity/ugc URN.',
+      });
+    }
 
     const account = await SocialAccount.findOne({
       userId: req.user.id,
@@ -738,6 +817,7 @@ router.delete('/comments/disconnect', requireJwtAuth, async (req, res) => {
     const metadata = account.metadata && typeof account.metadata === 'object' ? account.metadata : {};
     delete metadata.linkedinComments;
     account.metadata = metadata;
+    account.markModified('metadata');
     await account.save();
 
     logger.info(`[LinkedIn/Comments] Comments access disconnected for user ${req.user.id}`);
