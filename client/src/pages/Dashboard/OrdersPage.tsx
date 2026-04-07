@@ -174,9 +174,14 @@ function CEOOrders() {
 
       {confirmAction.type && confirmAction.orderId && (
         <ConfirmActionModal
-          type={confirmAction.type}
+          open={true}
+          title={confirmAction.type === 'approve' ? 'Approve Order' : 'Reject Order'}
+          message={confirmAction.type === 'approve' ? 'Are you sure you want to approve this order?' : 'Are you sure you want to reject this order?'}
+          confirmLabel={confirmAction.type === 'approve' ? 'Approve' : 'Reject'}
+          confirmColor={confirmAction.type === 'approve' ? 'green' : 'red'}
+          isProcessing={actionId === confirmAction.orderId}
           onConfirm={() => handleApproveOrder(confirmAction.orderId!, confirmAction.type === 'approve')}
-          onCancel={() => setConfirmAction({ type: null, orderId: null })}
+          onClose={() => setConfirmAction({ type: null, orderId: null })}
         />
       )}
     </>
