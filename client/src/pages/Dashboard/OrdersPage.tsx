@@ -29,7 +29,7 @@ function CEOOrders() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | 'all'>('all');
   const [actionId, setActionId] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<{ type: 'approve' | 'reject' | null; orderId: string | null }>({
+  const [confirmAction, setConfirmAction] = useState<{ type: 'approve' | 'reject' | 'markPaid' | null; orderId: string | null }>({
     type: null,
     orderId: null,
   });
@@ -71,6 +71,26 @@ function CEOOrders() {
       if (!res.ok) throw new Error(await res.text() || 'Failed');
       await fetchOrders(selectedCustomerId);
       showToast({ message: approved ? 'Order approved' : 'Order rejected', status: 'success' });
+      setConfirmAction({ type: null, orderId: null });
+    } catch (e: any) {
+      showToast({ message: e.message, status: 'error' });
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleMarkPaid = async (orderId: string) => {
+    try {
+      setActionId(orderId);
+      const res = await fetch(`/api/signage/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        body: JSON.stringify({ paid: true }),
+      });
+      if (!res.ok) throw new Error(await res.text() || 'Failed');
+      await fetchOrders(selectedCustomerId);
+      showToast({ message: 'Order marked as paid', status: 'success' });
       setConfirmAction({ type: null, orderId: null });
     } catch (e: any) {
       showToast({ message: e.message, status: 'error' });
@@ -146,24 +166,35 @@ function CEOOrders() {
                     <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold capitalize">{order.status}</span>
                   </td>
                   <td className="px-4 py-3">
-                    {(order.status === 'pending' || order.status === 'pending_approval') && (
-                      <div className="flex gap-1">
+                    <div className="flex gap-1">
+                      {(order.status === 'pending' || order.status === 'pending_approval') && (
+                        <>
+                          <button
+                            onClick={() => setConfirmAction({ type: 'approve', orderId: order.orderId })}
+                            disabled={actionId === order.orderId}
+                            className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700 disabled:opacity-50"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => setConfirmAction({ type: 'reject', orderId: order.orderId })}
+                            disabled={actionId === order.orderId}
+                            className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700 disabled:opacity-50"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      {order.status === 'approved' && !order.paid && (
                         <button
-                          onClick={() => setConfirmAction({ type: 'approve', orderId: order.orderId })}
+                          onClick={() => setConfirmAction({ type: 'markPaid', orderId: order.orderId })}
                           disabled={actionId === order.orderId}
-                          className="rounded bg-green-600 px-2 py-1 text-xs text-white hover:bg-green-700 disabled:opacity-50"
+                          className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
                         >
-                          Approve
+                          Mark Paid
                         </button>
-                        <button
-                          onClick={() => setConfirmAction({ type: 'reject', orderId: order.orderId })}
-                          disabled={actionId === order.orderId}
-                          className="rounded bg-red-600 px-2 py-1 text-xs text-white hover:bg-red-700 disabled:opacity-50"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -175,12 +206,15 @@ function CEOOrders() {
       {confirmAction.type && confirmAction.orderId && (
         <ConfirmActionModal
           open={true}
-          title={confirmAction.type === 'approve' ? 'Approve Order' : 'Reject Order'}
-          message={confirmAction.type === 'approve' ? 'Are you sure you want to approve this order?' : 'Are you sure you want to reject this order?'}
-          confirmLabel={confirmAction.type === 'approve' ? 'Approve' : 'Reject'}
-          confirmColor={confirmAction.type === 'approve' ? 'green' : 'red'}
+          title={confirmAction.type === 'approve' ? 'Approve Order' : confirmAction.type === 'reject' ? 'Reject Order' : 'Mark as Paid'}
+          message={confirmAction.type === 'approve' ? 'Are you sure you want to approve this order?' : confirmAction.type === 'reject' ? 'Are you sure you want to reject this order?' : 'Mark this order as paid?'}
+          confirmLabel={confirmAction.type === 'approve' ? 'Approve' : confirmAction.type === 'reject' ? 'Reject' : 'Mark Paid'}
+          confirmColor={confirmAction.type === 'approve' ? 'green' : confirmAction.type === 'reject' ? 'red' : 'blue'}
           isProcessing={actionId === confirmAction.orderId}
-          onConfirm={() => handleApproveOrder(confirmAction.orderId!, confirmAction.type === 'approve')}
+          onConfirm={() => confirmAction.type === 'markPaid'
+            ? handleMarkPaid(confirmAction.orderId!)
+            : handleApproveOrder(confirmAction.orderId!, confirmAction.type === 'approve')
+          }
           onClose={() => setConfirmAction({ type: null, orderId: null })}
         />
       )}
