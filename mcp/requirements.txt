@@ -1,0 +1,4 @@
+fastmcp
+motor
+pymongo
+python-dotenv

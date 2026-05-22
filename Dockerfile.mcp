@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir fastmcp motor python-dotenv uvicorn
+
+COPY mcp/ .
+
+ENV PYTHONUNBUFFERED=1
+# Paksa FastMCP pakai SSE transport via env var
+ENV FASTMCP_TRANSPORT=sse
+ENV FASTMCP_HOST=0.0.0.0
+ENV FASTMCP_PORT=3001
+
+EXPOSE 3001
+
+CMD ["python", "main.py"]
