@@ -15,7 +15,7 @@ from database import (
     delete_memory_db,
 )
 
-mcp = FastMCP("A2H Task Assignment")
+mcp = FastMCP("Jamot A2H Task Assignment")
 
 
 # ─────────────────────────────────────────────

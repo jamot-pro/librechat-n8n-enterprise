@@ -1,24 +1,27 @@
-# A2H MCP — AI-to-Human Task Coordination
+# jamot-mcp — AI-to-Human Task Coordination MCP Server
 
-A Model Context Protocol (MCP) server that transforms AI agents into a **central coordination brain** for human teams. Assign tasks, check workload, decompose complex instructions, and ensure every human contributor receives full context — all through a single SSE endpoint.
+> A remote MCP server that lets AI agents assign tasks, check team workload, decompose complex instructions, and hand over full context to human contributors — all through a single SSE endpoint.
+
+**MCP Server Name:** `jamot-mcp`  
+**Transport:** SSE  
+**Endpoint:** `https://your-server:3001/sse`
 
 ---
 
-## What It Does
+## What This MCP Server Does
 
-- **Autonomous task decomposition** — AI breaks complex instructions into actionable subtasks automatically
-- **Contextual handover** — every task carries chat summary, document references, and goals so humans know exactly what to do
-- **Proactive workload analytics** — AI checks team capacity before assigning and warns when someone is overloaded
-- **Long-term memory** — agent remembers decisions and preferences across conversations
-- **Smart auto-assign** — finds the best available person based on workload and competencies
+`jamot-mcp` is a **task coordination MCP server** that exposes 15 tools for AI agents to:
+
+- Create and assign tasks to human team members
+- Check workload before assigning (warns if someone is overloaded)
+- Decompose complex instructions into subtasks automatically
+- Attach full context (chat summary, goals, documents) to every task
+- Remember decisions and preferences across conversations
+- Suggest workload redistribution when the team is unbalanced
 
 ---
 
 ## Quick Start
-
-### Prerequisites
-- Docker
-- MongoDB instance (Atlas or local)
 
 ### Run with Docker
 
@@ -27,44 +30,29 @@ docker run -d \
   -e MONGO_URI=mongodb+srv://user:password@cluster.mongodb.net/yourdb \
   -e WORKLOAD_THRESHOLD=5 \
   -p 3001:3001 \
-  yourdockerhubname/a2h-mcp:latest
+  jamot/jamot-mcp:latest
 ```
 
-### Environment Variables
+### Add to Your AI Platform
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `MONGO_URI` | ✅ | — | MongoDB connection string |
-| `WORKLOAD_THRESHOLD` | ❌ | `5` | Max active tasks before warning |
-
----
-
-## Connect to Your AI Platform
-
-Once running, add the SSE endpoint to your AI platform config:
-
-```
-http://your-server:3001/sse
-```
-
-### LibreChat (`librechat.yaml`)
+**LibreChat (`librechat.yaml`):**
 ```yaml
 mcpSettings:
   allowedDomains:
     - 'your-server'
 
 mcpServers:
-  a2h-coordinator:
+  jamot-mcp:
     type: sse
     url: http://your-server:3001/sse
     timeout: 60000
 ```
 
-### Claude Desktop (`claude_desktop_config.json`)
+**Claude Desktop (`claude_desktop_config.json`):**
 ```json
 {
   "mcpServers": {
-    "a2h-coordinator": {
+    "jamot-mcp": {
       "url": "http://your-server:3001/sse"
     }
   }
@@ -73,62 +61,88 @@ mcpServers:
 
 ---
 
-## Available Tools
+## Environment Variables
 
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `MONGO_URI` | ✅ | — | MongoDB connection string |
+| `WORKLOAD_THRESHOLD` | ❌ | `5` | Max active tasks per user before warning |
+
+---
+
+## MCP Tools
+
+### Task Management
 | Tool | Description |
 |---|---|
-| `get_assignable_users` | Fetch all team members |
+| `create_a2h_task` | Create a task with full contextual handover (summary, goals, docs) |
+| `edit_task` | Update task fields (title, status, assignee, due date) |
+| `delete_task` | Delete task and cascade to subtasks |
+| `get_tasks` | List tasks filtered by assignee or status |
+
+### Task Decomposition
+| Tool | Description |
+|---|---|
+| `decompose_task` | Break a complex instruction into parent + subtasks |
+| `smart_assign_and_decompose` | Auto-find best assignee + decompose in one call |
+
+### Workload & Analytics
+| Tool | Description |
+|---|---|
 | `get_team_workload_report` | Active task count per user |
-| `check_workload_before_assign` | Warn if user is overloaded |
-| `recommend_best_assignee` | Find best person by workload + competency |
-| `suggest_redistribution` | Rebalance overloaded team |
-| `get_overdue_tasks` | Find tasks past due date |
-| `create_a2h_task` | Create task with full context handover |
-| `edit_task` | Update task fields |
-| `delete_task` | Delete task (cascades to subtasks) |
-| `get_tasks` | List tasks by assignee/status |
-| `decompose_task` | Break complex task into parent + subtasks |
-| `smart_assign_and_decompose` | Auto-route + decompose in one call |
-| `save_memory` | Store context across conversations |
-| `get_memory` | Recall past decisions and preferences |
+| `check_workload_before_assign` | Warn if user is overloaded, suggest alternatives |
+| `suggest_redistribution` | Identify overloaded/underloaded members |
+| `get_overdue_tasks` | Find tasks past their due date |
+
+### Users
+| Tool | Description |
+|---|---|
+| `get_assignable_users` | Fetch all team members from database |
+| `get_human_profiles` | Filter users by minimum impact score |
+| `recommend_best_assignee` | Find best person by workload + competency match |
+
+### Memory
+| Tool | Description |
+|---|---|
+| `save_memory` | Store context and decisions across conversations |
+| `get_memory` | Recall past decisions and team preferences |
 | `delete_memory` | Remove a memory entry |
 
 ---
 
 ## Recommended Agent Instructions
 
-Add this to your agent's system prompt for best results:
-
 ```
-You are an A2H coordination agent connected to an internal task management system via MCP tools.
+You are a task coordination agent connected to jamot-mcp.
 
 RULES:
-1. At the start of EVERY conversation, call get_memory() to recall relevant context.
-2. Before assigning ANY task, ALWAYS call check_workload_before_assign(user_id) first.
-3. Never answer from general knowledge — always use tools to fetch real data.
-4. After important decisions, call save_memory() to remember for future conversations.
+1. At the start of every conversation, call get_memory() to recall context.
+2. Before assigning any task, always call check_workload_before_assign first.
+3. Always use tools — never answer from general knowledge.
+4. After important decisions, call save_memory() to persist them.
 5. If someone seems overwhelmed, proactively call suggest_redistribution().
 ```
 
 ---
 
-## Database Schema
+## Database Requirements
 
-The MCP uses two MongoDB collections:
+Requires MongoDB with these collections:
 
-**`tasks`** — stores all tasks and subtasks
-**`agent_memory`** — stores agent long-term memory
-
-Your existing `users` collection is read-only — the MCP only queries it, never writes.
+- `users` — team members (read-only, queried for assignments)
+- `tasks` — created and managed by this MCP server
+- `agent_memory` — auto-created for agent long-term memory
 
 ---
 
 ## Built With
 
-- [FastMCP](https://gofastmcp.com) — MCP server framework
+- [FastMCP](https://gofastmcp.com) 3.x — MCP server framework
 - [Motor](https://motor.readthedocs.io) — async MongoDB driver
 - Python 3.11
 
 ---
 
 ## License
+
+MIT — built by [Jamot](https://jamot.pro)
